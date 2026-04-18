@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id          String     @id @default(cuid())
+  email       String     @unique
+  name        String
+  image       String?
+  displayName String
+  createdAt   DateTime   @default(now())
+  jobsAdded   Job[]      @relation("AddedBy")
+  entries     JobEntry[]
+
+  @@index([email])
+}
+
+model Job {
+  id        String     @id @default(cuid())
+  company   String
+  position  String
+  link      String     @unique
+  notes     String?
+  addedById String
+  addedBy   User       @relation("AddedBy", fields: [addedById], references: [id])
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  entries   JobEntry[]
+
+  @@index([company])
+  @@index([createdAt])
+}
+
+model JobEntry {
+  id        String         @id @default(cuid())
+  jobId     String
+  userId    String
+  status    AppStatus      @default(NONE)
+  referral  ReferralStatus @default(NONE)
+  updatedAt DateTime       @updatedAt
+  job       Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@index([userId])
+  @@index([status])
+}
+
+enum AppStatus {
+  NONE
+  APPLIED
+  APPLIED_WITH_REFERRAL
+  SKIPPED
+  REJECTED
+  EXPIRED
+  OFFER
+}
+
+enum ReferralStatus {
+  NONE
+  REQUESTED
+  RECEIVED
+  NOT_NEEDED
+}
