@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { auth, isAdminEmail } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 const patchSchema = z.object({
@@ -21,8 +21,11 @@ export async function PATCH(
 
   const job = await prisma.job.findUnique({ where: { id } });
   if (!job) return new NextResponse("Not found", { status: 404 });
-  if (job.addedById !== session.user.id) {
-    return new NextResponse("Only the creator can edit this job", {
+  if (
+    job.addedById !== session.user.id &&
+    !isAdminEmail(session.user.email)
+  ) {
+    return new NextResponse("Only the creator or an admin can edit this job", {
       status: 403,
     });
   }
@@ -50,10 +53,14 @@ export async function DELETE(
 
   const job = await prisma.job.findUnique({ where: { id } });
   if (!job) return new NextResponse("Not found", { status: 404 });
-  if (job.addedById !== session.user.id) {
-    return new NextResponse("Only the creator can delete this job", {
-      status: 403,
-    });
+  if (
+    job.addedById !== session.user.id &&
+    !isAdminEmail(session.user.email)
+  ) {
+    return new NextResponse(
+      "Only the creator or an admin can delete this job",
+      { status: 403 },
+    );
   }
   await prisma.job.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });

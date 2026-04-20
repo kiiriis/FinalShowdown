@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { auth, isAdminEmail } from "@/lib/auth";
 import { getAllJobs, getAllUsers } from "@/lib/data";
 import { Nav } from "@/components/nav";
 import { JobsBoard } from "@/components/jobs-board";
@@ -37,6 +37,7 @@ export default async function HomePage() {
           }))}
           users={users}
           currentUserId={session.user.id}
+          isAdmin={isAdminEmail(session.user.email)}
         />
       </main>
     </>

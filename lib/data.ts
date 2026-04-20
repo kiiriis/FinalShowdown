@@ -97,13 +97,23 @@ export async function getDashboardData() {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 90);
   const byDay = new Map<string, Record<string, number>>();
-  const userKey = (id: string) => id;
+  const totalsByDay = new Map<string, number>();
   for (const j of jobs) {
     if (j.createdAt < cutoff) continue;
     const day = j.createdAt.toISOString().slice(0, 10);
     const row = byDay.get(day) ?? {};
-    row[userKey(j.addedById)] = (row[userKey(j.addedById)] ?? 0) + 1;
+    row[j.addedById] = (row[j.addedById] ?? 0) + 1;
     byDay.set(day, row);
+    totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + 1);
+  }
+  // Treat any single day with 100+ jobs as a bulk import (CSV seed) and
+  // exclude it from the timeline so a single spike doesn't swamp the chart.
+  const importDays: Array<{ day: string; count: number }> = [];
+  for (const [day, count] of totalsByDay) {
+    if (count >= 100) {
+      importDays.push({ day, count });
+      byDay.delete(day);
+    }
   }
   const timeline = Array.from(byDay.entries())
     .sort(([a], [b]) => a.localeCompare(b))
@@ -118,5 +128,12 @@ export async function getDashboardData() {
     )
     .sort((a, b) => b.entry.updatedAt.getTime() - a.entry.updatedAt.getTime());
 
-  return { users, totalJobs, perUser, timeline, referralRequests };
+  return {
+    users,
+    totalJobs,
+    perUser,
+    timeline,
+    referralRequests,
+    importDays,
+  };
 }

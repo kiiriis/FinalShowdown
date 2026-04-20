@@ -1,7 +1,7 @@
 import { AppStatus, ReferralStatus } from "@prisma/client";
 
 export const APP_STATUS_LABEL: Record<AppStatus, string> = {
-  NONE: "—",
+  NONE: "Not applied",
   APPLIED: "Applied",
   APPLIED_WITH_REFERRAL: "Applied (ref)",
   SKIPPED: "Skipped",
@@ -19,32 +19,37 @@ export const REFERRAL_STATUS_LABEL: Record<ReferralStatus, string> = {
 
 // Tailwind classes per status. Tuned for both light and dark themes.
 export const APP_STATUS_STYLE: Record<AppStatus, string> = {
-  NONE: "bg-muted text-muted-foreground border-border",
+  NONE: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
   APPLIED: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
   APPLIED_WITH_REFERRAL:
     "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
-  SKIPPED: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300 border-zinc-500/30",
+  SKIPPED:
+    "bg-zinc-200/60 text-zinc-700 dark:bg-zinc-100/10 dark:text-zinc-200 border-zinc-300 dark:border-zinc-100/20",
   REJECTED: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
-  EXPIRED: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+  EXPIRED:
+    "bg-stone-500/15 text-stone-600 dark:text-stone-400 border-stone-500/30",
   OFFER:
     "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
 };
 
 export const REFERRAL_STATUS_STYLE: Record<ReferralStatus, string> = {
-  NONE: "text-muted-foreground",
-  REQUESTED: "text-amber-600 dark:text-amber-300",
-  RECEIVED: "text-emerald-600 dark:text-emerald-300",
-  NOT_NEEDED: "text-muted-foreground",
+  NONE: "bg-transparent text-muted-foreground border-transparent",
+  REQUESTED:
+    "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/40",
+  RECEIVED:
+    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
+  NOT_NEEDED:
+    "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/30",
 };
 
 export const APP_STATUSES: AppStatus[] = [
-  "NONE",
   "APPLIED",
-  "APPLIED_WITH_REFERRAL",
   "SKIPPED",
+  "APPLIED_WITH_REFERRAL",
+  "OFFER",
   "REJECTED",
   "EXPIRED",
-  "OFFER",
+  "NONE",
 ];
 
 export const REFERRAL_STATUSES: ReferralStatus[] = [

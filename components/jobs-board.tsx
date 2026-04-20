@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   ExternalLink,
   Search,
@@ -11,16 +10,19 @@ import {
   Trash2,
   HandHelping,
   Inbox,
+  StickyNote,
 } from "lucide-react";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn, formatRelative, initials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { StatusPill } from "./status-pill";
 import { AddJobDialog } from "./add-job-dialog";
+import { EditJobDialog } from "./edit-job-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -32,7 +34,6 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { APP_STATUSES, APP_STATUS_LABEL } from "@/lib/status-maps";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 type Entry = {
   id: string;
@@ -52,6 +53,7 @@ type Job = {
   company: string;
   position: string;
   link: string;
+  notes?: string | null;
   createdAt: Date | string;
   addedBy: User;
   entries: Entry[];
@@ -63,21 +65,44 @@ export function JobsBoard({
   jobs: initialJobs,
   users,
   currentUserId,
+  isAdmin = false,
 }: {
   jobs: Job[];
   users: User[];
   currentUserId: string;
+  isAdmin?: boolean;
 }) {
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status");
+  const initialStatus: AppStatus | "ALL" =
+    statusParam && APP_STATUSES.includes(statusParam as AppStatus)
+      ? (statusParam as AppStatus)
+      : "ALL";
+
   const [jobs, setJobs] = React.useState(initialJobs);
   const [query, setQuery] = React.useState("");
+  const deferredQuery = React.useDeferredValue(query);
   const [sort, setSort] = React.useState<SortKey>("newest");
-  const [myStatus, setMyStatus] = React.useState<AppStatus | "ALL">("ALL");
+  const [myStatus, setMyStatus] = React.useState<AppStatus | "ALL">(
+    initialStatus,
+  );
   const [onlyReferrals, setOnlyReferrals] = React.useState(false);
   const [onlyUntouched, setOnlyUntouched] = React.useState(false);
   const searchRef = React.useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   React.useEffect(() => setJobs(initialJobs), [initialJobs]);
+
+  const searchIndex = React.useMemo(
+    () =>
+      new Map(
+        jobs.map((j) => [
+          j.id,
+          `${j.company} ${j.position}`.toLowerCase(),
+        ]),
+      ),
+    [jobs],
+  );
 
   // Keyboard: "/" focuses search, "d" → dashboard
   React.useEffect(() => {
@@ -97,13 +122,9 @@ export function JobsBoard({
 
   const filtered = React.useMemo(() => {
     let out = jobs;
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (q) {
-      out = out.filter(
-        (j) =>
-          j.company.toLowerCase().includes(q) ||
-          j.position.toLowerCase().includes(q),
-      );
+      out = out.filter((j) => searchIndex.get(j.id)?.includes(q));
     }
     if (myStatus !== "ALL") {
       out = out.filter((j) => {
@@ -140,7 +161,16 @@ export function JobsBoard({
       );
     }
     return out;
-  }, [jobs, query, myStatus, onlyReferrals, onlyUntouched, sort, currentUserId]);
+  }, [
+    jobs,
+    deferredQuery,
+    myStatus,
+    onlyReferrals,
+    onlyUntouched,
+    sort,
+    currentUserId,
+    searchIndex,
+  ]);
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this job? This also clears everyone's status.")) return;
@@ -250,34 +280,21 @@ export function JobsBoard({
       </div>
 
       <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="hidden md:grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-2.5 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="hidden md:grid grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-4 px-4 py-2.5 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Company / Position</div>
           <div>Statuses</div>
           <div>Added</div>
-          <div className="w-8" />
+          <div />
         </div>
         {filtered.length === 0 ? (
           <EmptyState />
         ) : (
-          <motion.ul
-            className="divide-y"
-            initial={false}
-            animate="show"
-            variants={{
-              show: { transition: { staggerChildren: 0.01 } },
-            }}
-          >
-            <AnimatePresence initial={false}>
-              {filtered.slice(0, 400).map((job) => (
-                <motion.li
-                  key={job.id}
-                  layout
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="group grid md:grid-cols-[1fr_auto_auto_auto] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
-                >
+          <ul className="divide-y">
+            {filtered.slice(0, 200).map((job) => (
+              <li
+                key={job.id}
+                className="group grid md:grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
+              >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium truncate">
@@ -287,39 +304,53 @@ export function JobsBoard({
                         href={job.link}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground shrink-0"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </Link>
+                      {job.notes && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="text-amber-500 dark:text-amber-300 shrink-0 cursor-help"
+                              aria-label="Has notes"
+                            >
+                              <StickyNote className="h-3.5 w-3.5" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="right"
+                            className="max-w-xs whitespace-pre-wrap"
+                          >
+                            {job.notes}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground truncate">
                       {job.position || "—"}
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex flex-wrap items-start gap-3">
                     {users.map((u) => {
                       const entry = job.entries.find((e) => e.userId === u.id);
+                      const isMe = u.id === currentUserId;
+                      const canEdit = isMe || isAdmin;
                       return (
                         <div
                           key={u.id}
-                          className="flex items-center gap-1"
+                          className="flex flex-col items-start gap-1 min-w-[88px]"
                         >
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Avatar className="h-5 w-5">
-                                {u.image && (
-                                  <AvatarImage
-                                    src={u.image}
-                                    alt={u.displayName}
-                                  />
-                                )}
-                                <AvatarFallback className="text-[9px]">
-                                  {initials(u.displayName)}
-                                </AvatarFallback>
-                              </Avatar>
-                            </TooltipTrigger>
-                            <TooltipContent>{u.displayName}</TooltipContent>
-                          </Tooltip>
+                          <span
+                            className={cn(
+                              "text-xs font-medium leading-none",
+                              isMe
+                                ? "text-foreground"
+                                : "text-muted-foreground",
+                            )}
+                          >
+                            {u.displayName}
+                          </span>
                           <StatusPill
                             entryId={entry?.id ?? null}
                             jobId={job.id}
@@ -327,7 +358,7 @@ export function JobsBoard({
                             userName={u.displayName}
                             status={entry?.status ?? "NONE"}
                             referral={entry?.referral ?? "NONE"}
-                            editable={u.id === currentUserId}
+                            editable={canEdit}
                             onUpdated={(upd) => {
                               setJobs((prev) =>
                                 prev.map((j) =>
@@ -366,28 +397,42 @@ export function JobsBoard({
                     <span className="hidden sm:inline">
                       {job.addedBy.displayName}
                     </span>
-                    <span>· {formatRelative(job.createdAt)}</span>
+                    <span suppressHydrationWarning>
+                      · {formatRelative(job.createdAt)}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-end">
-                    {job.addedBy.id === currentUserId && (
-                      <button
-                        onClick={() => handleDelete(job.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                        aria-label="Delete job"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                  <div className="flex items-center justify-end gap-1">
+                    {(job.addedBy.id === currentUserId || isAdmin) && (
+                      <>
+                        <EditJobDialog
+                          job={job}
+                          onSaved={(updated) =>
+                            setJobs((prev) =>
+                              prev.map((j) =>
+                                j.id === updated.id ? { ...j, ...updated } : j,
+                              ),
+                            )
+                          }
+                        />
+                        <button
+                          onClick={() => handleDelete(job.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                          aria-label="Delete job"
+                          title="Delete job"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
                     )}
                   </div>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </motion.ul>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
-      {filtered.length > 400 && (
+      {filtered.length > 200 && (
         <p className="text-xs text-muted-foreground text-center">
-          Showing first 400 of {filtered.length} results — refine your search.
+          Showing first 200 of {filtered.length} results — refine your search.
         </p>
       )}
     </div>

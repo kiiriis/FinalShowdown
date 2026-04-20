@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { auth, isAdminEmail } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 
@@ -23,7 +23,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const { jobId, userId, status, referral } = parsed.data;
-  if (userId !== session.user.id) {
+  if (userId !== session.user.id && !isAdminEmail(session.user.email)) {
     return new NextResponse("You can only change your own status.", {
       status: 403,
     });

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -52,8 +52,26 @@ export function StatusPill({
   const [local, setLocal] = React.useState({ status, referral, entryId });
 
   async function save(next: { status?: AppStatus; referral?: ReferralStatus }) {
-    const newStatus = next.status ?? local.status;
-    const newReferral = next.referral ?? local.referral;
+    let newStatus = next.status ?? local.status;
+    let newReferral = next.referral ?? local.referral;
+
+    // Coupling rules: keep status + referral semantically consistent
+    if (next.status === "APPLIED_WITH_REFERRAL") {
+      // Applied WITH a referral → referral must be RECEIVED (not Requested/None)
+      newReferral = "RECEIVED";
+    }
+    if (next.referral === "RECEIVED" && local.status === "APPLIED") {
+      // Received a referral after already applying plain → promote to Applied (ref)
+      newStatus = "APPLIED_WITH_REFERRAL";
+    }
+    if (
+      next.referral === "REQUESTED" &&
+      local.status === "APPLIED_WITH_REFERRAL"
+    ) {
+      // Can't still be requesting a referral if you already applied with one
+      newStatus = "APPLIED";
+    }
+
     const prev = local;
     setLocal({ ...local, status: newStatus, referral: newReferral });
     try {
@@ -93,28 +111,42 @@ export function StatusPill({
   const pillBase =
     "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors";
   const pillClass = cn(pillBase, APP_STATUS_STYLE[local.status]);
+  const referralChipClass = cn(
+    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none",
+    REFERRAL_STATUS_STYLE[local.referral],
+  );
 
-  const pill = (
-    <AnimatePresence mode="wait" initial={false}>
+  const stacked = (
+    <div className="flex flex-col items-start gap-1">
       <motion.span
         key={local.status}
         initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.85, opacity: 0 }}
         transition={{ duration: 0.15 }}
         className={pillClass}
       >
         {APP_STATUS_LABEL[local.status]}
-        <ReferralIcon referral={local.referral} />
       </motion.span>
-    </AnimatePresence>
+      {local.referral !== "NONE" && (
+        <motion.span
+          key={local.referral}
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.15 }}
+          className={referralChipClass}
+        >
+          <ReferralIcon referral={local.referral} />
+          {REFERRAL_STATUS_LABEL[local.referral]}
+        </motion.span>
+      )}
+    </div>
   );
 
   if (!editable) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="cursor-default">{pill}</span>
+          <span className="cursor-default">{stacked}</span>
         </TooltipTrigger>
         <TooltipContent>
           {userName} • {APP_STATUS_LABEL[local.status]}
@@ -128,10 +160,10 @@ export function StatusPill({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex flex-col items-start gap-1 rounded cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={`Change ${userName} status`}
       >
-        {pill}
+        {stacked}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuLabel>Status</DropdownMenuLabel>
@@ -143,11 +175,13 @@ export function StatusPill({
           >
             <span
               className={cn(
-                "inline-block h-2 w-2 rounded-full",
-                s === local.status ? "bg-primary" : "bg-muted-foreground/40",
+                "inline-block h-3 w-3 rounded-full border",
+                APP_STATUS_STYLE[s],
               )}
             />
-            {APP_STATUS_LABEL[s]}
+            <span className={s === local.status ? "font-semibold" : ""}>
+              {APP_STATUS_LABEL[s]}
+            </span>
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
@@ -156,10 +190,19 @@ export function StatusPill({
           <DropdownMenuItem
             key={r}
             onClick={() => save({ referral: r })}
-            className={cn("flex items-center gap-2", REFERRAL_STATUS_STYLE[r])}
+            className="flex items-center gap-2"
           >
-            <ReferralIcon referral={r} />
-            {REFERRAL_STATUS_LABEL[r]}
+            <span
+              className={cn(
+                "inline-block h-3 w-3 rounded-full border",
+                r === "NONE"
+                  ? "bg-muted border-border"
+                  : REFERRAL_STATUS_STYLE[r],
+              )}
+            />
+            <span className={r === local.referral ? "font-semibold" : ""}>
+              {REFERRAL_STATUS_LABEL[r]}
+            </span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

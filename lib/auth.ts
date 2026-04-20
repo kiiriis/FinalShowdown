@@ -22,6 +22,12 @@ function parseDisplayNames(): Map<string, string> {
   return m;
 }
 
+export function isAdminEmail(email: string | null | undefined): boolean {
+  const admin = (process.env.ADMIN_SEED_EMAIL ?? "").toLowerCase().trim();
+  if (!admin || !email) return false;
+  return email.toLowerCase() === admin;
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   providers: [

@@ -1,13 +1,28 @@
+# Dependencies
 node_modules/
+
+# Build output
 .next/
+dist/
+*.tsbuildinfo
+
+# Secrets — never commit
 .env
 .env.local
 .env.*.local
-*.log
-.DS_Store
-.turbo/
-dist/
-coverage/
-.vscode/
+
+# Local SQLite scratch DBs (we use Postgres)
 prisma/*.db
 prisma/*.db-journal
+
+# Editor / OS noise
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Misc
+*.log
+.turbo/
+coverage/
+

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { Trophy, LayoutDashboard, Briefcase, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -97,12 +98,11 @@ export function Nav({ user }: Props) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <form action="/api/auth/signout" method="POST">
-                  <button type="submit" className="flex items-center w-full">
-                    <LogOut className="h-4 w-4 mr-2" /> Sign out
-                  </button>
-                </form>
+              <DropdownMenuItem
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="cursor-pointer"
+              >
+                <LogOut className="h-4 w-4 mr-2" /> Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -54,26 +54,30 @@ export default async function DashboardPage() {
 
         {/* KPI row */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <Kpi label="Total jobs" value={data.totalJobs} />
+          <Kpi label="Total jobs" value={data.totalJobs} href="/" />
           <Kpi
             label="My applied"
             value={me?.totals.applied ?? 0}
             accent="sky"
+            href="/?status=APPLIED"
           />
           <Kpi
             label="My skipped"
             value={me?.totals.skipped ?? 0}
             accent="zinc"
+            href="/?status=SKIPPED"
           />
           <Kpi
             label="My rejected"
             value={me?.totals.rejected ?? 0}
             accent="rose"
+            href="/?status=REJECTED"
           />
           <Kpi
             label="My offers"
             value={me?.totals.offers ?? 0}
             accent="emerald"
+            href="/?status=OFFER"
           />
         </div>
 
@@ -121,6 +125,17 @@ export default async function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {data.importDays.length > 0 && (
+              <div className="mb-3 rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                {data.importDays.map((d) => (
+                  <div key={d.day}>
+                    {d.count.toLocaleString()} jobs imported from CSV on{" "}
+                    <span className="font-medium text-foreground">{d.day}</span>{" "}
+                    — excluded from chart below so daily trends stay readable.
+                  </div>
+                ))}
+              </div>
+            )}
             <Timeline
               data={data.timeline}
               users={data.users.map((u) => ({
@@ -254,10 +269,12 @@ function Kpi({
   label,
   value,
   accent,
+  href,
 }: {
   label: string;
   value: number;
   accent?: "sky" | "zinc" | "rose" | "emerald" | "violet";
+  href?: string;
 }) {
   const color =
     accent === "sky"
@@ -269,16 +286,26 @@ function Kpi({
           : accent === "emerald"
             ? "from-emerald-500/20 to-emerald-500/5 text-emerald-600 dark:text-emerald-300"
             : "from-violet-500/20 to-violet-500/5 text-violet-600 dark:text-violet-300";
-  return (
-    <div
-      className={`relative rounded-xl border p-4 overflow-hidden bg-gradient-to-br ${color}`}
-    >
+  const body = (
+    <>
       <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
         {label}
       </div>
       <div className="mt-1 text-3xl font-display font-semibold tabular-nums">
         {value}
       </div>
-    </div>
+    </>
   );
+  const classes = `relative rounded-xl border p-4 overflow-hidden bg-gradient-to-br ${color}`;
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={`${classes} block transition-transform hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+      >
+        {body}
+      </Link>
+    );
+  }
+  return <div className={classes}>{body}</div>;
 }
