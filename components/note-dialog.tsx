@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { MessageSquareText } from "lucide-react";
+import { MessageSquareText, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -48,13 +48,18 @@ export function NoteDialog({
   }) => void;
 }) {
   const myEntry = entries.find((e) => e.userId === currentUserId);
+  const me = users.find((u) => u.id === currentUserId);
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState(myEntry?.note ?? "");
   const [saving, setSaving] = React.useState(false);
+  const [preview, setPreview] = React.useState(false);
 
   // Re-sync draft when someone else's edit (via SSE) changes our note.
   React.useEffect(() => {
-    if (!open) setDraft(myEntry?.note ?? "");
+    if (!open) {
+      setDraft(myEntry?.note ?? "");
+      setPreview(false);
+    }
   }, [myEntry?.note, open]);
 
   const othersWithNotes = entries.filter(
@@ -161,22 +166,79 @@ export function NoteDialog({
             </div>
           )}
 
-          {/* My note — editable */}
+          {/* My note — editable + preview */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <label className="text-xs font-medium text-muted-foreground">
                 Your note
               </label>
-              <span className="text-[10px] text-muted-foreground">
-                {draft.length}/2000
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground">
+                  {draft.length}/2000
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreview((p) => !p)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-colors",
+                    preview
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-label={preview ? "Switch to edit" : "Preview note"}
+                  title={preview ? "Switch to edit" : "Preview how others see it"}
+                >
+                  {preview ? (
+                    <>
+                      <Pencil className="h-3 w-3" /> Edit
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-3 w-3" /> Preview
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value.slice(0, 2000))}
-              placeholder="Drop a message — e.g. 'needs a referral', 'OA easy', 'ghosted after 2 weeks'…"
-              className="min-h-[100px] resize-y"
-            />
+            {preview ? (
+              <div className="rounded-lg border bg-muted/30 p-3 min-h-[100px]">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Avatar className="h-5 w-5">
+                    {me?.image && (
+                      <AvatarImage
+                        src={me.image}
+                        alt={me.displayName}
+                      />
+                    )}
+                    <AvatarFallback className="text-[9px]">
+                      {initials(me?.displayName ?? "?")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs font-medium">
+                    {me?.displayName ?? "You"}
+                  </span>
+                  <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Preview
+                  </span>
+                </div>
+                {draft.trim() ? (
+                  <p className="text-sm whitespace-pre-wrap break-words">
+                    {draft}
+                  </p>
+                ) : (
+                  <p className="text-sm italic text-muted-foreground">
+                    Nothing to preview yet — write something in Edit mode.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value.slice(0, 2000))}
+                placeholder="Drop a message — e.g. 'needs a referral', 'OA easy', 'ghosted after 2 weeks'…"
+                className="min-h-[100px] resize-y"
+              />
+            )}
           </div>
         </div>
 
