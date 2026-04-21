@@ -128,6 +128,68 @@ export async function getDashboardData() {
     )
     .sort((a, b) => b.entry.updatedAt.getTime() - a.entry.updatedAt.getTime());
 
+  // Applications over time (day/week/month) per user. "Application" means an
+  // entry whose status is APPLIED or APPLIED_WITH_REFERRAL; we use the entry's
+  // updatedAt as when they applied. CSV-seeded statuses all share a single
+  // updatedAt (the seed run) — detect and exclude those spike days so trends
+  // stay readable, mirroring the `importDays` handling above.
+  const applied: Array<{ userId: string; ts: Date }> = [];
+  for (const j of jobs) {
+    for (const e of j.entries) {
+      if (e.status === "APPLIED" || e.status === "APPLIED_WITH_REFERRAL") {
+        applied.push({ userId: e.userId, ts: e.updatedAt });
+      }
+    }
+  }
+  const appliedByDay = new Map<string, number>();
+  for (const a of applied) {
+    const k = a.ts.toISOString().slice(0, 10);
+    appliedByDay.set(k, (appliedByDay.get(k) ?? 0) + 1);
+  }
+  const seedDays = new Set<string>();
+  for (const [day, total] of appliedByDay) {
+    if (total >= 200) seedDays.add(day);
+  }
+  const cleanApplied = applied.filter(
+    (a) => !seedDays.has(a.ts.toISOString().slice(0, 10)),
+  );
+
+  const bucketDay = (d: Date) => d.toISOString().slice(0, 10);
+  const bucketWeek = (d: Date) => {
+    // Sunday-start week, labeled as YYYY-MM-DD of that Sunday (UTC).
+    const x = new Date(d);
+    x.setUTCHours(0, 0, 0, 0);
+    x.setUTCDate(x.getUTCDate() - x.getUTCDay());
+    return x.toISOString().slice(0, 10);
+  };
+  const bucketMonth = (d: Date) => d.toISOString().slice(0, 7);
+
+  const buildSeries = (
+    fn: (d: Date) => string,
+    limit: number,
+  ): Array<Record<string, string | number>> => {
+    const byBucket = new Map<string, Record<string, number>>();
+    for (const a of cleanApplied) {
+      const k = fn(a.ts);
+      const row = byBucket.get(k) ?? {};
+      row[a.userId] = (row[a.userId] ?? 0) + 1;
+      byBucket.set(k, row);
+    }
+    const sorted = Array.from(byBucket.entries()).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return sorted.slice(-limit).map(([bucket, counts]) => ({
+      bucket,
+      ...counts,
+    }));
+  };
+
+  const applications = {
+    day: buildSeries(bucketDay, 30),
+    week: buildSeries(bucketWeek, 26),
+    month: buildSeries(bucketMonth, 12),
+  };
+
   return {
     users,
     totalJobs,
@@ -135,5 +197,6 @@ export async function getDashboardData() {
     timeline,
     referralRequests,
     importDays,
+    applications,
   };
 }

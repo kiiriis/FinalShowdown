@@ -14,6 +14,7 @@ import {
 import { StatusDonut } from "@/components/charts/status-donut";
 import { UserBar } from "@/components/charts/user-bar";
 import { Timeline } from "@/components/charts/timeline";
+import { ApplicationsOverTime } from "@/components/charts/applications-over-time";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { initials, formatRelative } from "@/lib/utils";
 
@@ -116,6 +117,24 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Applications over time</CardTitle>
+            <CardDescription>
+              How many jobs each of you has applied to — toggle the granularity.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ApplicationsOverTime
+              series={data.applications}
+              users={data.users.map((u) => ({
+                id: u.id,
+                displayName: u.displayName,
+              }))}
+            />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
