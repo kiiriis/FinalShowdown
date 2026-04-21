@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { Trophy, LayoutDashboard, Briefcase, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useLiveRefresh } from "@/lib/use-live-refresh";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { ThemeToggle } from "./theme-toggle";
@@ -21,6 +22,7 @@ import { initials } from "@/lib/utils";
 
 type Props = {
   user: {
+    id?: string;
     name?: string | null;
     email?: string | null;
     image?: string | null;
@@ -36,6 +38,7 @@ const LINKS = [
 export function Nav({ user }: Props) {
   const pathname = usePathname();
   const name = user.displayName || user.name || "Player";
+  useLiveRefresh(user.id);
   return (
     <header className="sticky top-0 z-40 border-b bg-background/70 backdrop-blur-xl">
       <div className="container flex h-14 items-center gap-2">

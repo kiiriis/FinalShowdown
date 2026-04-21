@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth, isAdminEmail } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { emitChange } from "@/lib/events";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 
 const patchSchema = z.object({
@@ -42,5 +43,6 @@ export async function PATCH(req: Request) {
       ...(referral !== undefined && { referral }),
     },
   });
+  emitChange("entry.updated", session.user.id);
   return NextResponse.json(entry);
 }

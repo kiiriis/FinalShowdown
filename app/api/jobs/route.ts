@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { emitChange } from "@/lib/events";
 
 const createSchema = z.object({
   company: z.string().min(1),
@@ -55,5 +56,6 @@ export async function POST(req: Request) {
       addedById: session.user.id,
     },
   });
+  emitChange("job.created", session.user.id);
   return NextResponse.json(job, { status: 201 });
 }

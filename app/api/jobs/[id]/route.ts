@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth, isAdminEmail } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { emitChange } from "@/lib/events";
 
 const patchSchema = z.object({
   company: z.string().min(1).optional(),
@@ -39,6 +40,7 @@ export async function PATCH(
     where: { id },
     data: parsed.data,
   });
+  emitChange("job.updated", session.user.id);
   return NextResponse.json(updated);
 }
 
@@ -63,5 +65,6 @@ export async function DELETE(
     );
   }
   await prisma.job.delete({ where: { id } });
+  emitChange("job.deleted", session.user.id);
   return new NextResponse(null, { status: 204 });
 }
