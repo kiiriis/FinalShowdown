@@ -13,6 +13,7 @@ import {
   StickyNote,
   Copy,
   Check,
+  CalendarDays,
 } from "lucide-react";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 import { toast } from "sonner";
@@ -90,10 +91,23 @@ export function JobsBoard({
   );
   const [onlyReferrals, setOnlyReferrals] = React.useState(false);
   const [onlyUntouched, setOnlyUntouched] = React.useState(false);
+  // Day-grouping uses the viewer's local timezone. We only turn it on after
+  // mount so SSR (server TZ) and first client render match — otherwise jobs
+  // near a day boundary would land in different buckets and React would throw
+  // a hydration mismatch.
+  const [mounted, setMounted] = React.useState(false);
+  const PAGE_SIZE = 200;
+  const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
   const searchRef = React.useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   React.useEffect(() => setJobs(initialJobs), [initialJobs]);
+  React.useEffect(() => setMounted(true), []);
+  // Reset pagination whenever the filtered set changes — otherwise switching
+  // filters could leave a huge window open or hide results behind the cap.
+  React.useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [deferredQuery, myStatus, onlyReferrals, onlyUntouched, sort]);
 
   const searchIndex = React.useMemo(
     () =>
@@ -173,6 +187,46 @@ export function JobsBoard({
     currentUserId,
     searchIndex,
   ]);
+
+  type DayGroup = {
+    key: string;
+    label: { date: string; weekday: string } | null;
+    jobs: Job[];
+  };
+  const groups: DayGroup[] = React.useMemo(() => {
+    const capped = filtered.slice(0, visibleCount);
+    // Only chronological sort gets day headers — grouping A-Z or most-applied
+    // by day would be meaningless.
+    if (!mounted || sort !== "newest") {
+      return [{ key: "flat", label: null, jobs: capped }];
+    }
+    const byKey = new Map<string, DayGroup>();
+    for (const job of capped) {
+      const d = new Date(job.createdAt);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const key = `${y}-${m}-${day}`;
+      let g = byKey.get(key);
+      if (!g) {
+        g = {
+          key,
+          label: {
+            date: d.toLocaleDateString("en-US", {
+              month: "2-digit",
+              day: "2-digit",
+              year: "numeric",
+            }),
+            weekday: d.toLocaleDateString("en-US", { weekday: "long" }),
+          },
+          jobs: [],
+        };
+        byKey.set(key, g);
+      }
+      g.jobs.push(job);
+    }
+    return Array.from(byKey.values());
+  }, [filtered, sort, mounted, visibleCount]);
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this job? This also clears everyone's status.")) return;
@@ -291,12 +345,35 @@ export function JobsBoard({
         {filtered.length === 0 ? (
           <EmptyState />
         ) : (
-          <ul className="divide-y">
-            {filtered.slice(0, 200).map((job) => (
-              <li
-                key={job.id}
-                className="group grid md:grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
-              >
+          groups.map((group) => (
+            <section key={group.key}>
+              {group.label && (
+                <div className="flex items-center gap-2 px-4 py-2 border-b text-sm bg-gradient-to-r from-violet-500/10 via-sky-500/10 to-transparent">
+                  <CalendarDays className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
+                  <span
+                    className="font-semibold tabular-nums text-violet-700 dark:text-violet-200"
+                    suppressHydrationWarning
+                  >
+                    {group.label.date}
+                  </span>
+                  <span
+                    className="text-sky-700/80 dark:text-sky-300/80"
+                    suppressHydrationWarning
+                  >
+                    · {group.label.weekday}
+                  </span>
+                  <span className="ml-auto text-xs font-medium rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-200 px-2 py-0.5">
+                    {group.jobs.length}{" "}
+                    {group.jobs.length === 1 ? "job" : "jobs"}
+                  </span>
+                </div>
+              )}
+              <ul className="divide-y">
+                {group.jobs.map((job) => (
+                  <li
+                    key={job.id}
+                    className="group grid md:grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
+                  >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium truncate">
@@ -430,15 +507,31 @@ export function JobsBoard({
                       </>
                     )}
                   </div>
-              </li>
-            ))}
-          </ul>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))
         )}
       </div>
-      {filtered.length > 200 && (
-        <p className="text-xs text-muted-foreground text-center">
-          Showing first 200 of {filtered.length} results — refine your search.
-        </p>
+      {filtered.length > visibleCount && (
+        <div className="flex flex-col items-center gap-2 py-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setVisibleCount((v) =>
+                Math.min(v + PAGE_SIZE, filtered.length),
+              )
+            }
+          >
+            Load {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Showing {visibleCount.toLocaleString()} of{" "}
+            {filtered.length.toLocaleString()} results
+          </p>
+        </div>
       )}
     </div>
   );
