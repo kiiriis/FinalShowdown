@@ -191,25 +191,40 @@ export function JobsBoard({
   type DayGroup = {
     key: string;
     label: { date: string; weekday: string } | null;
+    total: number;
     jobs: Job[];
   };
   const groups: DayGroup[] = React.useMemo(() => {
-    const capped = filtered.slice(0, visibleCount);
     // Only chronological sort gets day headers — grouping A-Z or most-applied
     // by day would be meaningless.
     if (!mounted || sort !== "newest") {
-      return [{ key: "flat", label: null, jobs: capped }];
+      return [
+        {
+          key: "flat",
+          label: null,
+          total: filtered.length,
+          jobs: filtered.slice(0, visibleCount),
+        },
+      ];
     }
-    const byKey = new Map<string, DayGroup>();
-    for (const job of capped) {
+    // Bucket the full filtered set first so the per-day count in the header
+    // reflects every match, independent of how many rows are currently
+    // rendered under the Load More cap.
+    type Bucket = {
+      key: string;
+      label: { date: string; weekday: string };
+      all: Job[];
+    };
+    const byKey = new Map<string, Bucket>();
+    for (const job of filtered) {
       const d = new Date(job.createdAt);
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, "0");
       const day = String(d.getDate()).padStart(2, "0");
       const key = `${y}-${m}-${day}`;
-      let g = byKey.get(key);
-      if (!g) {
-        g = {
+      let b = byKey.get(key);
+      if (!b) {
+        b = {
           key,
           label: {
             date: d.toLocaleDateString("en-US", {
@@ -219,13 +234,29 @@ export function JobsBoard({
             }),
             weekday: d.toLocaleDateString("en-US", { weekday: "long" }),
           },
-          jobs: [],
+          all: [],
         };
-        byKey.set(key, g);
+        byKey.set(key, b);
       }
-      g.jobs.push(job);
+      b.all.push(job);
     }
-    return Array.from(byKey.values());
+    // Only render jobs within the visible window, but keep each day's true
+    // total for its header. Drop days that have no visible rows yet.
+    const visibleIds = new Set(
+      filtered.slice(0, visibleCount).map((j) => j.id),
+    );
+    const result: DayGroup[] = [];
+    for (const b of byKey.values()) {
+      const jobs = b.all.filter((j) => visibleIds.has(j.id));
+      if (jobs.length === 0) continue;
+      result.push({
+        key: b.key,
+        label: b.label,
+        total: b.all.length,
+        jobs,
+      });
+    }
+    return result;
   }, [filtered, sort, mounted, visibleCount]);
 
   async function handleDelete(id: string) {
@@ -362,9 +393,16 @@ export function JobsBoard({
                   >
                     · {group.label.weekday}
                   </span>
-                  <span className="ml-auto text-xs font-medium rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-200 px-2 py-0.5">
-                    {group.jobs.length}{" "}
-                    {group.jobs.length === 1 ? "job" : "jobs"}
+                  <span className="ml-auto flex items-center gap-2">
+                    {group.jobs.length < group.total && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {group.jobs.length.toLocaleString()} shown
+                      </span>
+                    )}
+                    <span className="text-xs font-medium rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-200 px-2 py-0.5">
+                      {group.total.toLocaleString()}{" "}
+                      {group.total === 1 ? "job" : "jobs"}
+                    </span>
                   </span>
                 </div>
               )}
