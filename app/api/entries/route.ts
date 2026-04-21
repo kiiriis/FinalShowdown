@@ -43,6 +43,39 @@ export async function PATCH(req: Request) {
       ...(referral !== undefined && { referral }),
     },
   });
+
+  // Cascade EXPIRED: if someone flags a posting as expired, anyone who hasn't
+  // acted on it yet (status NONE, or no entry at all) gets auto-marked EXPIRED
+  // too — otherwise the job sits with stale "Not applied" chips forever. We
+  // don't touch explicit statuses (APPLIED / SKIPPED / REJECTED / OFFER).
+  if (status === "EXPIRED") {
+    const otherUsers = await prisma.user.findMany({
+      where: { id: { not: userId } },
+      select: { id: true },
+    });
+    if (otherUsers.length > 0) {
+      await prisma.$transaction([
+        prisma.jobEntry.updateMany({
+          where: {
+            jobId,
+            userId: { in: otherUsers.map((u) => u.id) },
+            status: "NONE",
+          },
+          data: { status: "EXPIRED" },
+        }),
+        prisma.jobEntry.createMany({
+          data: otherUsers.map((u) => ({
+            jobId,
+            userId: u.id,
+            status: "EXPIRED" as const,
+            referral: "NONE" as const,
+          })),
+          skipDuplicates: true,
+        }),
+      ]);
+    }
+  }
+
   emitChange("entry.updated", session.user.id);
   return NextResponse.json(entry);
 }

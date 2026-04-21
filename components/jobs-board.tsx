@@ -496,6 +496,12 @@ export function JobsBoard({
                                     : j,
                                 ),
                               );
+                              // EXPIRED cascades to other users server-side;
+                              // refetch so the actor's own UI reflects it too
+                              // (SSE skips events the actor caused).
+                              if (upd.status === "EXPIRED") {
+                                router.refresh();
+                              }
                             }}
                           />
                         </div>
