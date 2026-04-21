@@ -51,6 +51,14 @@ export function StatusPill({
 }: Props) {
   const [local, setLocal] = React.useState({ status, referral, entryId });
 
+  // Keep local state in sync when props change — e.g. after router.refresh()
+  // brings in cascaded changes from the server, or when SSE live-refresh
+  // pulls in someone else's edits. Without this, the pill would stay frozen
+  // on whatever it was mounted with until a full browser reload.
+  React.useEffect(() => {
+    setLocal({ status, referral, entryId });
+  }, [status, referral, entryId]);
+
   async function save(next: { status?: AppStatus; referral?: ReferralStatus }) {
     let newStatus = next.status ?? local.status;
     let newReferral = next.referral ?? local.referral;
