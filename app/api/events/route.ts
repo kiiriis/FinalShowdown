@@ -30,8 +30,10 @@ export async function GET(req: Request) {
       };
       emitter.on("change", onChange);
 
+      // Named `ping` events — unlike SSE comments, these fire on the client
+      // and let the watchdog detect a silently-dead connection.
       const heartbeat = setInterval(() => {
-        safeEnqueue(`: ping ${Date.now()}\n\n`);
+        safeEnqueue(`event: ping\ndata: ${Date.now()}\n\n`);
       }, 25_000);
 
       const cleanup = () => {
