@@ -1,10 +1,18 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Trophy, LayoutDashboard, Briefcase, LogOut } from "lucide-react";
+import {
+  Trophy,
+  LayoutDashboard,
+  Briefcase,
+  LogOut,
+  RefreshCw,
+} from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLiveRefresh } from "@/lib/use-live-refresh";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -37,8 +45,17 @@ const LINKS = [
 
 export function Nav({ user }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [refreshing, startTransition] = React.useTransition();
   const name = user.displayName || user.name || "Player";
   useLiveRefresh(user.id);
+
+  function refresh() {
+    startTransition(() => {
+      router.refresh();
+      toast.success("Refreshed", { duration: 1200 });
+    });
+  }
   return (
     <header className="sticky top-0 z-40 border-b bg-background/70 backdrop-blur-xl">
       <div className="container flex h-14 items-center gap-2">
@@ -78,6 +95,18 @@ export function Nav({ user }: Props) {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={refresh}
+            disabled={refreshing}
+            aria-label="Refresh data"
+            title="Refresh data"
+          >
+            <RefreshCw
+              className={cn("h-4 w-4", refreshing && "animate-spin")}
+            />
+          </Button>
           <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
