@@ -15,7 +15,13 @@
  */
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+// Prefer the unpooled endpoint — PgBouncer's cached catalog has bitten us
+// during schema-ish operations before. Falls back to DATABASE_URL for
+// environments that only set one.
+const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const prisma = new PrismaClient({
+  datasources: { db: { url } },
+});
 
 function arg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
