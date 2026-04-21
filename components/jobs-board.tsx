@@ -11,6 +11,8 @@ import {
   HandHelping,
   Inbox,
   StickyNote,
+  Copy,
+  Check,
 } from "lucide-react";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 import { toast } from "sonner";
@@ -305,9 +307,12 @@ export function JobsBoard({
                         target="_blank"
                         rel="noreferrer"
                         className="text-muted-foreground hover:text-foreground shrink-0"
+                        aria-label="Open job link"
+                        title="Open job link"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </Link>
+                      <CopyLinkButton link={job.link} />
                       {job.notes && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -459,6 +464,44 @@ function EmptyState() {
         <kbd className="rounded bg-muted px-1">N</kbd>.
       </p>
     </div>
+  );
+}
+
+function CopyLinkButton({ link }: { link: string }) {
+  const [copied, setCopied] = React.useState(false);
+
+  async function copy(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      toast.success("Link copied");
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Couldn't copy");
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className={cn(
+        "shrink-0 transition-colors",
+        copied
+          ? "text-emerald-500"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+      aria-label={copied ? "Link copied" : "Copy job link"}
+      title={copied ? "Copied!" : "Copy link"}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+    </button>
   );
 }
 
