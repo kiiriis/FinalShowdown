@@ -29,6 +29,7 @@ export function isAdminEmail(email: string | null | undefined): boolean {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   session: { strategy: "jwt" },
   providers: [
     Google({
