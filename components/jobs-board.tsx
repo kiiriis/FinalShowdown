@@ -25,6 +25,7 @@ import { Input } from "./ui/input";
 import { StatusPill } from "./status-pill";
 import { AddJobDialog } from "./add-job-dialog";
 import { EditJobDialog } from "./edit-job-dialog";
+import { NoteDialog } from "./note-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import {
   DropdownMenu,
@@ -43,6 +44,7 @@ type Entry = {
   userId: string;
   status: AppStatus;
   referral: ReferralStatus;
+  note?: string | null;
   updatedAt: Date | string;
 };
 type User = {
@@ -428,6 +430,30 @@ export function JobsBoard({
                         <ExternalLink className="h-3.5 w-3.5" />
                       </Link>
                       <CopyLinkButton link={job.link} />
+                      <NoteDialog
+                        jobId={job.id}
+                        jobTitle={`${job.company} — ${job.position || ""}`.trim()}
+                        users={users}
+                        entries={job.entries}
+                        currentUserId={currentUserId}
+                        onSaved={(upd) =>
+                          setJobs((prev) =>
+                            prev.map((j) =>
+                              j.id === job.id
+                                ? {
+                                    ...j,
+                                    entries: upsertNote(
+                                      j.entries,
+                                      upd.userId,
+                                      upd.entryId,
+                                      upd.note,
+                                    ),
+                                  }
+                                : j,
+                            ),
+                          )
+                        }
+                      />
                       {job.notes && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -586,6 +612,31 @@ function upsertEntry(entries: Entry[], next: Entry): Entry[] {
   if (i === -1) return [...entries, next];
   const copy = [...entries];
   copy[i] = next;
+  return copy;
+}
+
+function upsertNote(
+  entries: Entry[],
+  userId: string,
+  entryId: string,
+  note: string | null,
+): Entry[] {
+  const i = entries.findIndex((e) => e.userId === userId);
+  if (i === -1) {
+    return [
+      ...entries,
+      {
+        id: entryId,
+        userId,
+        status: "NONE",
+        referral: "NONE",
+        note,
+        updatedAt: new Date(),
+      },
+    ];
+  }
+  const copy = [...entries];
+  copy[i] = { ...copy[i], id: entryId, note, updatedAt: new Date() };
   return copy;
 }
 

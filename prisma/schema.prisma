@@ -43,6 +43,7 @@ model JobEntry {
   userId    String
   status    AppStatus      @default(NONE)
   referral  ReferralStatus @default(NONE)
+  note      String?
   updatedAt DateTime       @updatedAt
   job       Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)

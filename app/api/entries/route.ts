@@ -10,6 +10,8 @@ const patchSchema = z.object({
   userId: z.string().min(1),
   status: z.nativeEnum(AppStatus).optional(),
   referral: z.nativeEnum(ReferralStatus).optional(),
+  // Per-user sticky note. Null/empty string clears it.
+  note: z.string().max(2000).nullable().optional(),
 });
 
 /** Upserts a JobEntry for (jobId, userId). Users may only modify their own. */
@@ -23,7 +25,9 @@ export async function PATCH(req: Request) {
   if (!parsed.success)
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { jobId, userId, status, referral } = parsed.data;
+  const { jobId, userId, status, referral, note } = parsed.data;
+  // Empty string → null so "clearing" a note doesn't leave a ghost row.
+  const noteClean = note === undefined ? undefined : note === "" ? null : note;
   if (userId !== session.user.id && !isAdminEmail(session.user.email)) {
     return new NextResponse("You can only change your own status.", {
       status: 403,
@@ -37,10 +41,12 @@ export async function PATCH(req: Request) {
       userId,
       status: status ?? "NONE",
       referral: referral ?? "NONE",
+      note: noteClean ?? null,
     },
     update: {
       ...(status !== undefined && { status }),
       ...(referral !== undefined && { referral }),
+      ...(noteClean !== undefined && { note: noteClean }),
     },
   });
 

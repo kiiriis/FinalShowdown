@@ -30,6 +30,7 @@ export async function getAllJobs() {
           userId: true,
           status: true,
           referral: true,
+          note: true,
           updatedAt: true,
         },
       },
