@@ -125,9 +125,9 @@ export function NoteDialog({
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+        <DialogHeader className="min-w-0">
           <DialogTitle>Notes</DialogTitle>
-          <DialogDescription className="truncate">
+          <DialogDescription className="break-words">
             {jobTitle}
           </DialogDescription>
         </DialogHeader>
