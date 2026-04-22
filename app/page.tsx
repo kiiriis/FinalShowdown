@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { auth, isAdminEmail } from "@/lib/auth";
 import { getAllJobs, getAllUsers } from "@/lib/data";
+import { prisma } from "@/lib/db";
 import { Nav } from "@/components/nav";
 import { JobsBoard } from "@/components/jobs-board";
+import { WhatsNewBanner } from "@/components/whats-new-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +12,19 @@ export default async function HomePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const [jobs, users] = await Promise.all([getAllJobs(), getAllUsers()]);
+  const [jobs, users, currentUser] = await Promise.all([
+    getAllJobs(),
+    getAllUsers(),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        connectionTemplate: true,
+        referralTemplate: true,
+        email: true,
+        displayName: true,
+      },
+    }),
+  ]);
 
   return (
     <>
@@ -26,6 +40,7 @@ export default async function HomePage() {
             </p>
           </div>
         </div>
+        <WhatsNewBanner />
         <JobsBoard
           jobs={jobs.map((j) => ({
             ...j,
@@ -38,6 +53,16 @@ export default async function HomePage() {
           users={users}
           currentUserId={session.user.id}
           isAdmin={isAdminEmail(session.user.email)}
+          currentUserTemplates={
+            currentUser
+              ? {
+                  displayName: currentUser.displayName,
+                  email: currentUser.email,
+                  connectionTemplate: currentUser.connectionTemplate,
+                  referralTemplate: currentUser.referralTemplate,
+                }
+              : null
+          }
         />
       </main>
     </>

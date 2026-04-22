@@ -10,6 +10,7 @@ import {
   Briefcase,
   LogOut,
   RefreshCw,
+  MessageSquareText,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -129,6 +130,13 @@ export function Nav({ user }: Props) {
                   {user.email}
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <Link href="/settings/templates">
+                  <MessageSquareText className="h-4 w-4 mr-2" /> Message
+                  templates
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => signOut({ callbackUrl: "/login" })}

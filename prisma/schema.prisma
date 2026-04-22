@@ -9,14 +9,16 @@ datasource db {
 }
 
 model User {
-  id          String     @id @default(cuid())
-  email       String     @unique
-  name        String
-  image       String?
-  displayName String
-  createdAt   DateTime   @default(now())
-  jobsAdded   Job[]      @relation("AddedBy")
-  entries     JobEntry[]
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  name               String
+  image              String?
+  displayName        String
+  connectionTemplate String?
+  referralTemplate   String?
+  createdAt          DateTime   @default(now())
+  jobsAdded          Job[]      @relation("AddedBy")
+  entries            JobEntry[]
 
   @@index([email])
 }

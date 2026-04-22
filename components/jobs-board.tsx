@@ -26,6 +26,7 @@ import { StatusPill } from "./status-pill";
 import { AddJobDialog } from "./add-job-dialog";
 import { EditJobDialog } from "./edit-job-dialog";
 import { NoteDialog } from "./note-dialog";
+import { MessageTemplateDialog } from "./message-template-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import {
   DropdownMenu,
@@ -66,16 +67,25 @@ type Job = {
 
 type SortKey = "newest" | "company" | "most-applied";
 
+type CurrentUserTemplates = {
+  displayName: string;
+  email: string;
+  connectionTemplate: string | null;
+  referralTemplate: string | null;
+};
+
 export function JobsBoard({
   jobs: initialJobs,
   users,
   currentUserId,
   isAdmin = false,
+  currentUserTemplates = null,
 }: {
   jobs: Job[];
   users: User[];
   currentUserId: string;
   isAdmin?: boolean;
+  currentUserTemplates?: CurrentUserTemplates | null;
 }) {
   const searchParams = useSearchParams();
   const statusParam = searchParams.get("status");
@@ -412,7 +422,7 @@ export function JobsBoard({
                 {group.jobs.map((job) => (
                   <li
                     key={job.id}
-                    className="group grid md:grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
+                    className="group grid md:grid-cols-[minmax(0,1fr)_420px_160px_120px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
                   >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -554,6 +564,28 @@ export function JobsBoard({
                     </span>
                   </div>
                   <div className="flex items-center justify-end gap-1">
+                    {currentUserTemplates && (
+                      <>
+                        <MessageTemplateDialog
+                          kind="connection"
+                          job={{
+                            company: job.company,
+                            position: job.position,
+                            link: job.link,
+                          }}
+                          user={currentUserTemplates}
+                        />
+                        <MessageTemplateDialog
+                          kind="referral"
+                          job={{
+                            company: job.company,
+                            position: job.position,
+                            link: job.link,
+                          }}
+                          user={currentUserTemplates}
+                        />
+                      </>
+                    )}
                     {(job.addedBy.id === currentUserId || isAdmin) && (
                       <>
                         <EditJobDialog
