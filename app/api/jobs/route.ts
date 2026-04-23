@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { emitChange } from "@/lib/events";
+import { normalizeLinkForDedup } from "@/lib/url-normalize";
 
 const createSchema = z.object({
   company: z.string().min(1),
@@ -37,12 +38,25 @@ export async function POST(req: Request) {
     );
   }
 
-  const existing = await prisma.job.findUnique({
-    where: { link: parsed.data.link },
+  // Dedup on both the raw link (exact match, catches legacy rows that
+  // predate backfill) and the normalized form (catches tracking-param
+  // variants, trailing-slash variants, http/https, etc.).
+  const linkNormalized = normalizeLinkForDedup(parsed.data.link);
+  const existing = await prisma.job.findFirst({
+    where: {
+      OR: [{ link: parsed.data.link }, { linkNormalized }],
+    },
+    select: { id: true, company: true, position: true, link: true },
   });
   if (existing) {
     return NextResponse.json(
-      { error: "Job already exists", id: existing.id },
+      {
+        error: "Job already exists",
+        id: existing.id,
+        company: existing.company,
+        position: existing.position,
+        link: existing.link,
+      },
       { status: 409 },
     );
   }
@@ -52,6 +66,7 @@ export async function POST(req: Request) {
       company: parsed.data.company,
       position: parsed.data.position,
       link: parsed.data.link,
+      linkNormalized,
       notes: parsed.data.notes ?? null,
       addedById: session.user.id,
     },

@@ -24,19 +24,21 @@ model User {
 }
 
 model Job {
-  id        String     @id @default(cuid())
-  company   String
-  position  String
-  link      String     @unique
-  notes     String?
-  addedById String
-  addedBy   User       @relation("AddedBy", fields: [addedById], references: [id])
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  entries   JobEntry[]
+  id             String     @id @default(cuid())
+  company        String
+  position       String
+  link           String     @unique
+  linkNormalized String?
+  notes          String?
+  addedById      String
+  addedBy        User       @relation("AddedBy", fields: [addedById], references: [id])
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  entries        JobEntry[]
 
   @@index([company])
   @@index([createdAt])
+  @@index([linkNormalized])
 }
 
 model JobEntry {

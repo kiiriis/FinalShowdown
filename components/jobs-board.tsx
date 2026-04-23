@@ -148,6 +148,53 @@ export function JobsBoard({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // When the add-job dialog detects a duplicate, it dispatches fs:jobs:focus
+  // with the existing job's id. Clear every active filter (so the row is
+  // actually in the DOM) and expand pagination to cover the full list before
+  // scrolling + flashing the row.
+  const [focusedJobId, setFocusedJobId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ jobId?: string }>).detail;
+      if (!detail?.jobId) return;
+      setQuery("");
+      setMyStatus("ALL");
+      setOnlyReferrals(false);
+      setOnlyUntouched(false);
+      setVisibleCount(Math.max(PAGE_SIZE, initialJobs.length));
+      setFocusedJobId(detail.jobId);
+    };
+    window.addEventListener("fs:jobs:focus", handler);
+    return () => window.removeEventListener("fs:jobs:focus", handler);
+  }, [initialJobs.length]);
+
+  React.useEffect(() => {
+    if (!focusedJobId) return;
+    // Let React flush the filter/pagination resets before we try to scroll.
+    const t = setTimeout(() => {
+      const el = document.getElementById(`job-${focusedJobId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add(
+          "ring-2",
+          "ring-amber-500",
+          "ring-offset-2",
+          "ring-offset-background",
+        );
+        setTimeout(() => {
+          el.classList.remove(
+            "ring-2",
+            "ring-amber-500",
+            "ring-offset-2",
+            "ring-offset-background",
+          );
+        }, 2500);
+      }
+      setFocusedJobId(null);
+    }, 60);
+    return () => clearTimeout(t);
+  }, [focusedJobId]);
+
   const filtered = React.useMemo(() => {
     let out = jobs;
     const q = deferredQuery.trim().toLowerCase();
@@ -422,7 +469,8 @@ export function JobsBoard({
                 {group.jobs.map((job) => (
                   <li
                     key={job.id}
-                    className="group grid md:grid-cols-[minmax(0,1fr)_420px_160px_120px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors"
+                    id={`job-${job.id}`}
+                    className="group grid md:grid-cols-[minmax(0,1fr)_420px_160px_120px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-all rounded-md"
                   >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">

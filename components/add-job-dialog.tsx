@@ -69,7 +69,31 @@ export function AddJobDialog({ triggerClassName }: { triggerClassName?: string }
         body: JSON.stringify(data),
       });
       if (res.status === 409) {
-        toast.error("A job with that link already exists.");
+        const dup = (await res.json().catch(() => null)) as {
+          id?: string;
+          company?: string;
+          position?: string;
+        } | null;
+        toast.error("A job with that link already exists.", {
+          description:
+            dup?.company && dup?.position
+              ? `${dup.company} — ${dup.position}`
+              : undefined,
+          action: dup?.id
+            ? {
+                label: "Jump to it",
+                onClick: () => {
+                  setOpen(false);
+                  // JobsBoard listens for this event and scrolls the row into view.
+                  window.dispatchEvent(
+                    new CustomEvent("fs:jobs:focus", {
+                      detail: { jobId: dup.id },
+                    }),
+                  );
+                },
+              }
+            : undefined,
+        });
         return;
       }
       if (!res.ok) throw new Error(await res.text());

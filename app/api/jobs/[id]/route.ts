@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth, isAdminEmail } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { emitChange } from "@/lib/events";
+import { normalizeLinkForDedup } from "@/lib/url-normalize";
 
 const patchSchema = z.object({
   company: z.string().min(1).optional(),
@@ -36,9 +37,36 @@ export async function PATCH(
   if (!parsed.success)
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
+  // If the link changed, enforce dedup against every other job and recompute
+  // the normalized form. If the link is unchanged, leave both columns alone.
+  const data: Record<string, unknown> = { ...parsed.data };
+  if (parsed.data.link && parsed.data.link !== job.link) {
+    const linkNormalized = normalizeLinkForDedup(parsed.data.link);
+    const clash = await prisma.job.findFirst({
+      where: {
+        id: { not: id },
+        OR: [{ link: parsed.data.link }, { linkNormalized }],
+      },
+      select: { id: true, company: true, position: true, link: true },
+    });
+    if (clash) {
+      return NextResponse.json(
+        {
+          error: "Another job already uses that link",
+          id: clash.id,
+          company: clash.company,
+          position: clash.position,
+          link: clash.link,
+        },
+        { status: 409 },
+      );
+    }
+    data.linkNormalized = linkNormalized;
+  }
+
   const updated = await prisma.job.update({
     where: { id },
-    data: parsed.data,
+    data,
   });
   emitChange("job.updated", session.user.id);
   return NextResponse.json(updated);
