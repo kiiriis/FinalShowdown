@@ -17,6 +17,7 @@ model User {
   connectionTemplate String?
   referralTemplate   String?
   followUpDelayDays  Int        @default(2)
+  isActive           Boolean    @default(true)
   createdAt          DateTime   @default(now())
   jobsAdded          Job[]      @relation("AddedBy")
   entries            JobEntry[]

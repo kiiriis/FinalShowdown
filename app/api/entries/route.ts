@@ -124,7 +124,7 @@ export async function PATCH(req: Request) {
   // don't touch explicit statuses (APPLIED / SKIPPED / REJECTED / OFFER).
   if (status === "EXPIRED") {
     const otherUsers = await prisma.user.findMany({
-      where: { id: { not: userId } },
+      where: { id: { not: userId }, isActive: true },
       select: { id: true },
     });
     if (otherUsers.length > 0) {

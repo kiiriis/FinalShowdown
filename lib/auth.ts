@@ -53,7 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         user.name ??
         email.split("@")[0];
 
-      await prisma.user.upsert({
+      const dbUser = await prisma.user.upsert({
         where: { email },
         update: {
           name: user.name ?? displayName,
@@ -66,6 +66,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           displayName,
         },
       });
+      if (!dbUser.isActive) return false;
       return true;
     },
     async jwt({ token, user }) {

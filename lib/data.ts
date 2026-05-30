@@ -6,6 +6,7 @@ export type PublicUser = Awaited<ReturnType<typeof getAllUsers>>[number];
 
 export async function getAllUsers() {
   return prisma.user.findMany({
+    where: { isActive: true },
     select: {
       id: true,
       displayName: true,
@@ -25,6 +26,7 @@ export async function getAllJobs() {
         select: { id: true, displayName: true, name: true, image: true },
       },
       entries: {
+        where: { user: { isActive: true } },
         select: {
           id: true,
           userId: true,
@@ -48,6 +50,7 @@ export type ReferralCount = Record<ReferralStatus, number>;
 
 export async function getDashboardData() {
   const [users, jobs] = await Promise.all([getAllUsers(), getAllJobs()]);
+  const activeUserIds = new Set(users.map((u) => u.id));
 
   const totalJobs = jobs.length;
 
@@ -129,7 +132,9 @@ export async function getDashboardData() {
   const referralRequests = jobs
     .flatMap((j) =>
       j.entries
-        .filter((e) => e.referral === "REQUESTED")
+        .filter(
+          (e) => e.referral === "REQUESTED" && activeUserIds.has(e.userId),
+        )
         .map((e) => ({ job: j, entry: e })),
     )
     .sort((a, b) => b.entry.updatedAt.getTime() - a.entry.updatedAt.getTime());
