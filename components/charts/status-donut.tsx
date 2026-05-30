@@ -15,6 +15,7 @@ const COLORS: Record<AppStatus, string> = {
   NONE: "#94a3b8",
   APPLIED: "#0ea5e9",
   APPLIED_WITH_REFERRAL: "#8b5cf6",
+  FOLLOW_UP_SENT: "#14b8a6",
   SKIPPED: "#71717a",
   REJECTED: "#f43f5e",
   EXPIRED: "#f59e0b",

@@ -4,6 +4,7 @@ export const APP_STATUS_LABEL: Record<AppStatus, string> = {
   NONE: "Not applied",
   APPLIED: "Applied",
   APPLIED_WITH_REFERRAL: "Applied (ref)",
+  FOLLOW_UP_SENT: "Follow-up sent",
   SKIPPED: "Skipped",
   REJECTED: "Rejected",
   EXPIRED: "Expired",
@@ -23,6 +24,8 @@ export const APP_STATUS_STYLE: Record<AppStatus, string> = {
   APPLIED: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
   APPLIED_WITH_REFERRAL:
     "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
+  FOLLOW_UP_SENT:
+    "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30",
   SKIPPED:
     "bg-zinc-200/60 text-zinc-700 dark:bg-zinc-100/10 dark:text-zinc-200 border-zinc-300 dark:border-zinc-100/20",
   REJECTED: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",

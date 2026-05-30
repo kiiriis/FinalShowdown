@@ -841,7 +841,11 @@ function ReferralTrackingDialog({
           title="LinkedIn referral"
         >
           <HandHelping className="h-3 w-3" />
-          {referral === "NONE" ? "Referral" : REFERRAL_STATUS_LABEL[referral]}
+          {entry?.referralFollowUpSent
+            ? "Referral follow-up sent"
+            : referral === "NONE"
+              ? "Referral"
+              : REFERRAL_STATUS_LABEL[referral]}
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -996,7 +1000,11 @@ function ColdEmailDialog({
           title="Cold email / cold DM"
         >
           {sent ? <MailCheck className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
-          {sent ? "Cold sent" : "Cold email"}
+          {entry?.coldEmailFollowUpSent
+            ? "Cold follow-up sent"
+            : sent
+              ? "Cold sent"
+              : "Cold email"}
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

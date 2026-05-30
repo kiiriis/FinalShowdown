@@ -63,6 +63,7 @@ export async function getDashboardData() {
       NONE: 0,
       APPLIED: 0,
       APPLIED_WITH_REFERRAL: 0,
+      FOLLOW_UP_SENT: 0,
       SKIPPED: 0,
       REJECTED: 0,
       EXPIRED: 0,
