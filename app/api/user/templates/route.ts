@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 const patchSchema = z.object({
   connectionTemplate: z.string().max(4000).nullable().optional(),
   referralTemplate: z.string().max(4000).nullable().optional(),
+  followUpDelayDays: z.number().int().min(1).max(30).optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -18,7 +19,7 @@ export async function PATCH(req: Request) {
   if (!parsed.success)
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { connectionTemplate, referralTemplate } = parsed.data;
+  const { connectionTemplate, referralTemplate, followUpDelayDays } = parsed.data;
 
   const user = await prisma.user.update({
     where: { id: session.user.id },
@@ -29,10 +30,12 @@ export async function PATCH(req: Request) {
       ...(referralTemplate !== undefined && {
         referralTemplate: referralTemplate === "" ? null : referralTemplate,
       }),
+      ...(followUpDelayDays !== undefined && { followUpDelayDays }),
     },
     select: {
       connectionTemplate: true,
       referralTemplate: true,
+      followUpDelayDays: true,
     },
   });
 

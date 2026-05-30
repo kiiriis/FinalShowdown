@@ -10,9 +10,25 @@ const patchSchema = z.object({
   userId: z.string().min(1),
   status: z.nativeEnum(AppStatus).optional(),
   referral: z.nativeEnum(ReferralStatus).optional(),
+  referralSentAt: z.string().nullable().optional(),
+  referralFollowUpSent: z.boolean().optional(),
+  // Tracks whether this user has sent a cold email / cold DM for the role.
+  coldEmailSent: z.boolean().optional(),
+  coldEmailSentAt: z.string().nullable().optional(),
+  coldEmailFollowUpSent: z.boolean().optional(),
   // Per-user sticky note. Null/empty string clears it.
   note: z.string().max(2000).nullable().optional(),
 });
+
+function parseDateField(value: string | null | undefined): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value.trim() === "") return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `${value}T12:00:00.000Z`
+    : value;
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
 
 /** Upserts a JobEntry for (jobId, userId). Users may only modify their own. */
 export async function PATCH(req: Request) {
@@ -25,27 +41,79 @@ export async function PATCH(req: Request) {
   if (!parsed.success)
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { jobId, userId, status, referral, note } = parsed.data;
+  const {
+    jobId,
+    userId,
+    status,
+    referral,
+    referralSentAt,
+    referralFollowUpSent,
+    coldEmailSent,
+    coldEmailSentAt,
+    coldEmailFollowUpSent,
+    note,
+  } = parsed.data;
   // Empty string → null so "clearing" a note doesn't leave a ghost row.
   const noteClean = note === undefined ? undefined : note === "" ? null : note;
+  const referralDate = parseDateField(referralSentAt);
+  const coldEmailDate = parseDateField(coldEmailSentAt);
+  if (
+    (referralSentAt !== undefined && referralDate === undefined) ||
+    (coldEmailSentAt !== undefined && coldEmailDate === undefined)
+  ) {
+    return NextResponse.json({ error: "Invalid outreach date" }, { status: 400 });
+  }
   if (userId !== session.user.id && !isAdminEmail(session.user.email)) {
     return new NextResponse("You can only change your own status.", {
       status: 403,
     });
   }
 
+  const createReferral =
+    referral ?? (referralDate ? "REQUESTED" : "NONE");
+  const createColdEmailSent = coldEmailSent ?? Boolean(coldEmailDate);
   const entry = await prisma.jobEntry.upsert({
     where: { jobId_userId: { jobId, userId } },
     create: {
       jobId,
       userId,
       status: status ?? "NONE",
-      referral: referral ?? "NONE",
+      referral: createReferral,
+      referralSentAt: referralDate ?? null,
+      referralFollowUpSent: referralFollowUpSent ?? false,
+      coldEmailSent: createColdEmailSent,
+      coldEmailSentAt: coldEmailDate ?? null,
+      coldEmailFollowUpSent: coldEmailFollowUpSent ?? false,
       note: noteClean ?? null,
     },
     update: {
       ...(status !== undefined && { status }),
-      ...(referral !== undefined && { referral }),
+      ...(referral !== undefined && {
+        referral,
+        ...(referral === "NONE" && {
+          referralSentAt: null,
+          referralFollowUpSent: false,
+        }),
+      }),
+      ...(referralDate !== undefined && { referralSentAt: referralDate }),
+      ...(referralDate === null && { referralFollowUpSent: false }),
+      ...(referralFollowUpSent !== undefined && { referralFollowUpSent }),
+      ...(coldEmailSent !== undefined && {
+        coldEmailSent,
+        ...(coldEmailSent === false && {
+          coldEmailSentAt: null,
+          coldEmailFollowUpSent: false,
+        }),
+      }),
+      ...(coldEmailDate !== undefined && {
+        coldEmailSentAt: coldEmailDate,
+        ...(coldEmailDate !== null && { coldEmailSent: true }),
+      }),
+      ...(coldEmailDate === null && {
+        coldEmailSent: false,
+        coldEmailFollowUpSent: false,
+      }),
+      ...(coldEmailFollowUpSent !== undefined && { coldEmailFollowUpSent }),
       ...(noteClean !== undefined && { note: noteClean }),
     },
   });

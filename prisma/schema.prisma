@@ -16,6 +16,7 @@ model User {
   displayName        String
   connectionTemplate String?
   referralTemplate   String?
+  followUpDelayDays  Int        @default(2)
   createdAt          DateTime   @default(now())
   jobsAdded          Job[]      @relation("AddedBy")
   entries            JobEntry[]
@@ -42,15 +43,20 @@ model Job {
 }
 
 model JobEntry {
-  id        String         @id @default(cuid())
-  jobId     String
-  userId    String
-  status    AppStatus      @default(NONE)
-  referral  ReferralStatus @default(NONE)
-  note      String?
-  updatedAt DateTime       @updatedAt
-  job       Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String         @id @default(cuid())
+  jobId                  String
+  userId                 String
+  status                 AppStatus      @default(NONE)
+  referral               ReferralStatus @default(NONE)
+  referralSentAt         DateTime?
+  referralFollowUpSent   Boolean        @default(false)
+  coldEmailSent          Boolean        @default(false)
+  coldEmailSentAt        DateTime?
+  coldEmailFollowUpSent  Boolean        @default(false)
+  note                   String?
+  updatedAt              DateTime       @updatedAt
+  job                    Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user                   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, userId])
   @@index([userId])

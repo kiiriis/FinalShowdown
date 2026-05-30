@@ -22,6 +22,7 @@ export default async function HomePage() {
         referralTemplate: true,
         email: true,
         displayName: true,
+        followUpDelayDays: true,
       },
     }),
   ]);
@@ -47,6 +48,8 @@ export default async function HomePage() {
             createdAt: j.createdAt.toISOString(),
             entries: j.entries.map((e) => ({
               ...e,
+              referralSentAt: e.referralSentAt?.toISOString() ?? null,
+              coldEmailSentAt: e.coldEmailSentAt?.toISOString() ?? null,
               updatedAt: e.updatedAt.toISOString(),
             })),
           }))}
@@ -60,6 +63,7 @@ export default async function HomePage() {
                   email: currentUser.email,
                   connectionTemplate: currentUser.connectionTemplate,
                   referralTemplate: currentUser.referralTemplate,
+                  followUpDelayDays: currentUser.followUpDelayDays,
                 }
               : null
           }

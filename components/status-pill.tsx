@@ -9,20 +9,15 @@ import {
   APP_STATUSES,
   APP_STATUS_LABEL,
   APP_STATUS_STYLE,
-  REFERRAL_STATUSES,
-  REFERRAL_STATUS_LABEL,
-  REFERRAL_STATUS_STYLE,
 } from "@/lib/status-maps";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { HandHelping, CheckCircle2, CircleSlash, Dot } from "lucide-react";
 
 type Props = {
   entryId: string | null;
@@ -119,47 +114,26 @@ export function StatusPill({
   const pillBase =
     "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors";
   const pillClass = cn(pillBase, APP_STATUS_STYLE[local.status]);
-  const referralChipClass = cn(
-    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none",
-    REFERRAL_STATUS_STYLE[local.referral],
-  );
-
-  const stacked = (
-    <div className="flex flex-col items-start gap-1">
-      <motion.span
-        key={local.status}
-        initial={{ scale: 0.85, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.15 }}
-        className={pillClass}
-      >
-        {APP_STATUS_LABEL[local.status]}
-      </motion.span>
-      {local.referral !== "NONE" && (
-        <motion.span
-          key={local.referral}
-          initial={{ scale: 0.85, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.15 }}
-          className={referralChipClass}
-        >
-          <ReferralIcon referral={local.referral} />
-          {REFERRAL_STATUS_LABEL[local.referral]}
-        </motion.span>
-      )}
-    </div>
+  const pill = (
+    <motion.span
+      key={local.status}
+      initial={{ scale: 0.85, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className={pillClass}
+    >
+      {APP_STATUS_LABEL[local.status]}
+    </motion.span>
   );
 
   if (!editable) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="cursor-default">{stacked}</span>
+          <span className="cursor-default">{pill}</span>
         </TooltipTrigger>
         <TooltipContent>
           {userName} • {APP_STATUS_LABEL[local.status]}
-          {local.referral !== "NONE" &&
-            ` • ${REFERRAL_STATUS_LABEL[local.referral]}`}
         </TooltipContent>
       </Tooltip>
     );
@@ -168,13 +142,13 @@ export function StatusPill({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="flex flex-col items-start gap-1 rounded cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex rounded cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={`Change ${userName} status`}
       >
-        {stacked}
+        {pill}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel>Status</DropdownMenuLabel>
+        <DropdownMenuLabel>Application status</DropdownMenuLabel>
         {APP_STATUSES.map((s) => (
           <DropdownMenuItem
             key={s}
@@ -192,41 +166,7 @@ export function StatusPill({
             </span>
           </DropdownMenuItem>
         ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>Referral</DropdownMenuLabel>
-        {REFERRAL_STATUSES.map((r) => (
-          <DropdownMenuItem
-            key={r}
-            onClick={() => save({ referral: r })}
-            className="flex items-center gap-2"
-          >
-            <span
-              className={cn(
-                "inline-block h-3 w-3 rounded-full border",
-                r === "NONE"
-                  ? "bg-muted border-border"
-                  : REFERRAL_STATUS_STYLE[r],
-              )}
-            />
-            <span className={r === local.referral ? "font-semibold" : ""}>
-              {REFERRAL_STATUS_LABEL[r]}
-            </span>
-          </DropdownMenuItem>
-        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-function ReferralIcon({ referral }: { referral: ReferralStatus }) {
-  switch (referral) {
-    case "REQUESTED":
-      return <HandHelping className="h-3 w-3" />;
-    case "RECEIVED":
-      return <CheckCircle2 className="h-3 w-3" />;
-    case "NOT_NEEDED":
-      return <CircleSlash className="h-3 w-3 opacity-50" />;
-    default:
-      return <Dot className="h-3 w-3 opacity-0" />;
-  }
 }

@@ -17,6 +17,7 @@ export default async function TemplatesPage() {
       referralTemplate: true,
       displayName: true,
       email: true,
+      followUpDelayDays: true,
     },
   });
 
@@ -43,6 +44,7 @@ export default async function TemplatesPage() {
           previewLink="https://example.com/jobs/123"
           userName={user.displayName}
           userEmail={user.email}
+          initialFollowUpDelayDays={user.followUpDelayDays}
         />
       </main>
     </>

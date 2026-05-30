@@ -9,11 +9,14 @@ import {
   ArrowUpDown,
   Trash2,
   HandHelping,
+  Info,
   Inbox,
   StickyNote,
   Copy,
   Check,
   CalendarDays,
+  Mail,
+  MailCheck,
 } from "lucide-react";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 import { toast } from "sonner";
@@ -29,6 +32,14 @@ import { NoteDialog } from "./note-dialog";
 import { MessageTemplateDialog } from "./message-template-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -38,13 +49,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { APP_STATUSES, APP_STATUS_LABEL } from "@/lib/status-maps";
+import {
+  APP_STATUSES,
+  APP_STATUS_LABEL,
+  REFERRAL_STATUSES,
+  REFERRAL_STATUS_LABEL,
+  REFERRAL_STATUS_STYLE,
+} from "@/lib/status-maps";
+import { buildSearchText, normalizeQuery } from "@/lib/search";
 
 type Entry = {
   id: string;
   userId: string;
   status: AppStatus;
   referral: ReferralStatus;
+  referralSentAt?: Date | string | null;
+  referralFollowUpSent: boolean;
+  coldEmailSent: boolean;
+  coldEmailSentAt?: Date | string | null;
+  coldEmailFollowUpSent: boolean;
   note?: string | null;
   updatedAt: Date | string;
 };
@@ -72,6 +95,7 @@ type CurrentUserTemplates = {
   email: string;
   connectionTemplate: string | null;
   referralTemplate: string | null;
+  followUpDelayDays: number;
 };
 
 export function JobsBoard({
@@ -122,13 +146,7 @@ export function JobsBoard({
   }, [deferredQuery, myStatus, onlyReferrals, onlyUntouched, sort]);
 
   const searchIndex = React.useMemo(
-    () =>
-      new Map(
-        jobs.map((j) => [
-          j.id,
-          `${j.company} ${j.position}`.toLowerCase(),
-        ]),
-      ),
+    () => new Map(jobs.map((j) => [j.id, buildSearchText(j)])),
     [jobs],
   );
 
@@ -197,9 +215,13 @@ export function JobsBoard({
 
   const filtered = React.useMemo(() => {
     let out = jobs;
-    const q = deferredQuery.trim().toLowerCase();
+    const q = normalizeQuery(deferredQuery);
     if (q) {
-      out = out.filter((j) => searchIndex.get(j.id)?.includes(q));
+      const tokens = q.split(/\s+/).filter(Boolean);
+      out = out.filter((j) => {
+        const hay = searchIndex.get(j.id);
+        return hay !== undefined && tokens.every((t) => hay.includes(t));
+      });
     }
     if (myStatus !== "ALL") {
       out = out.filter((j) => {
@@ -339,7 +361,7 @@ export function JobsBoard({
             ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search company or position… (press /)"
+            placeholder="Search jobs, links, notes… (press /)"
             className="pl-9"
           />
         </div>
@@ -428,7 +450,7 @@ export function JobsBoard({
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="hidden md:grid grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-4 px-4 py-2.5 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Company / Position</div>
-          <div>Statuses</div>
+          <div>My tracking</div>
           <div>Added</div>
           <div />
         </div>
@@ -535,63 +557,34 @@ export function JobsBoard({
                       {job.position || "—"}
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-start gap-3">
-                    {users.map((u) => {
-                      const entry = job.entries.find((e) => e.userId === u.id);
-                      const isMe = u.id === currentUserId;
-                      const canEdit = isMe || isAdmin;
-                      return (
-                        <div
-                          key={u.id}
-                          className="flex flex-col items-start gap-1 min-w-[88px]"
-                        >
-                          <span
-                            className={cn(
-                              "text-xs font-medium leading-none",
-                              isMe
-                                ? "text-foreground"
-                                : "text-muted-foreground",
-                            )}
-                          >
-                            {u.displayName}
-                          </span>
-                          <StatusPill
-                            entryId={entry?.id ?? null}
-                            jobId={job.id}
-                            userId={u.id}
-                            userName={u.displayName}
-                            status={entry?.status ?? "NONE"}
-                            referral={entry?.referral ?? "NONE"}
-                            editable={canEdit}
-                            onUpdated={(upd) => {
-                              setJobs((prev) =>
-                                prev.map((j) =>
-                                  j.id === job.id
-                                    ? {
-                                        ...j,
-                                        entries: upsertEntry(j.entries, {
-                                          id: upd.entryId,
-                                          userId: u.id,
-                                          status: upd.status,
-                                          referral: upd.referral,
-                                          updatedAt: new Date(),
-                                        }),
-                                      }
-                                    : j,
-                                ),
-                              );
-                              // EXPIRED cascades to other users server-side;
-                              // refetch so the actor's own UI reflects it too
-                              // (SSE skips events the actor caused).
-                              if (upd.status === "EXPIRED") {
-                                router.refresh();
+                  <MyTrackingControls
+                    job={job}
+                    currentUserId={currentUserId}
+                    currentUserName={
+                      users.find((u) => u.id === currentUserId)?.displayName ??
+                      "You"
+                    }
+                    followUpDelayDays={
+                      currentUserTemplates?.followUpDelayDays ?? 2
+                    }
+                    onEntryUpdated={(entry) => {
+                      setJobs((prev) =>
+                        prev.map((j) =>
+                          j.id === job.id
+                            ? {
+                                ...j,
+                                entries: upsertEntry(j.entries, entry),
                               }
-                            }}
-                          />
-                        </div>
+                            : j,
+                        ),
                       );
-                    })}
-                  </div>
+                      // EXPIRED cascades to other users server-side, so refetch
+                      // after the actor toggles it to pull the cascade locally.
+                      if (entry.status === "EXPIRED") {
+                        router.refresh();
+                      }
+                    }}
+                  />
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Avatar className="h-5 w-5">
                       {job.addedBy.image && (
@@ -612,6 +605,7 @@ export function JobsBoard({
                     </span>
                   </div>
                   <div className="flex items-center justify-end gap-1">
+                    <JobInfoDialog job={job} users={users} />
                     {currentUserTemplates && (
                       <>
                         <MessageTemplateDialog
@@ -687,11 +681,541 @@ export function JobsBoard({
   );
 }
 
-function upsertEntry(entries: Entry[], next: Entry): Entry[] {
+type EntryUpdate = Partial<Entry> & { id: string; userId: string };
+
+function MyTrackingControls({
+  job,
+  currentUserId,
+  currentUserName,
+  followUpDelayDays,
+  onEntryUpdated,
+}: {
+  job: Job;
+  currentUserId: string;
+  currentUserName: string;
+  followUpDelayDays: number;
+  onEntryUpdated: (entry: EntryUpdate) => void;
+}) {
+  const entry = job.entries.find((e) => e.userId === currentUserId);
+  const due = getFollowUpSuggestions(entry, followUpDelayDays);
+
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusPill
+          entryId={entry?.id ?? null}
+          jobId={job.id}
+          userId={currentUserId}
+          userName={currentUserName}
+          status={entry?.status ?? "NONE"}
+          referral={entry?.referral ?? "NONE"}
+          editable
+          onUpdated={(upd) =>
+            onEntryUpdated({
+              id: upd.entryId,
+              userId: currentUserId,
+              status: upd.status,
+              referral: upd.referral,
+              updatedAt: new Date(),
+            })
+          }
+        />
+        <ReferralTrackingDialog
+          jobId={job.id}
+          userId={currentUserId}
+          entry={entry}
+          onUpdated={onEntryUpdated}
+        />
+        <ColdEmailDialog
+          jobId={job.id}
+          userId={currentUserId}
+          entry={entry}
+          onUpdated={onEntryUpdated}
+        />
+      </div>
+      {due.length > 0 && (
+        <div className="inline-flex flex-wrap items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+          <CalendarDays className="h-3 w-3" />
+          Follow up due: {due.join(", ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReferralTrackingDialog({
+  jobId,
+  userId,
+  entry,
+  onUpdated,
+}: {
+  jobId: string;
+  userId: string;
+  entry?: Entry;
+  onUpdated: (entry: EntryUpdate) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [draftReferral, setDraftReferral] = React.useState<ReferralStatus>(
+    entry?.referral ?? "NONE",
+  );
+  const [sentDate, setSentDate] = React.useState(
+    dateInputValue(entry?.referralSentAt),
+  );
+  const [followUpSent, setFollowUpSent] = React.useState(
+    entry?.referralFollowUpSent ?? false,
+  );
+
+  React.useEffect(() => {
+    if (!open) return;
+    setDraftReferral(entry?.referral ?? "NONE");
+    setSentDate(dateInputValue(entry?.referralSentAt));
+    setFollowUpSent(entry?.referralFollowUpSent ?? false);
+  }, [open, entry?.referral, entry?.referralSentAt, entry?.referralFollowUpSent]);
+
+  async function save() {
+    setSaving(true);
+    let nextStatus: AppStatus | undefined;
+    const currentStatus = entry?.status ?? "NONE";
+    if (draftReferral === "RECEIVED" && currentStatus === "APPLIED") {
+      nextStatus = "APPLIED_WITH_REFERRAL";
+    }
+    if (draftReferral === "REQUESTED" && currentStatus === "APPLIED_WITH_REFERRAL") {
+      nextStatus = "APPLIED";
+    }
+    const nextSentDate =
+      draftReferral === "NONE" ? null : sentDate || todayInputValue();
+
+    try {
+      const res = await fetch("/api/entries", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jobId,
+          userId,
+          referral: draftReferral,
+          referralSentAt: nextSentDate,
+          referralFollowUpSent:
+            draftReferral === "NONE" ? false : followUpSent,
+          ...(nextStatus && { status: nextStatus }),
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as Entry;
+      onUpdated({
+        id: data.id,
+        userId: data.userId,
+        status: data.status,
+        referral: data.referral,
+        referralSentAt: data.referralSentAt,
+        referralFollowUpSent: data.referralFollowUpSent,
+        coldEmailSent: data.coldEmailSent,
+        coldEmailSentAt: data.coldEmailSentAt,
+        coldEmailFollowUpSent: data.coldEmailFollowUpSent,
+        note: data.note,
+        updatedAt: new Date(data.updatedAt),
+      });
+      toast.success("Referral updated");
+      setOpen(false);
+    } catch {
+      toast.error("Couldn't save referral");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const referral = entry?.referral ?? "NONE";
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+            referral === "NONE"
+              ? "bg-muted/40 text-muted-foreground border-border"
+              : REFERRAL_STATUS_STYLE[referral],
+          )}
+          aria-label="Update LinkedIn referral status"
+          title="LinkedIn referral"
+        >
+          <HandHelping className="h-3 w-3" />
+          {referral === "NONE" ? "Referral" : REFERRAL_STATUS_LABEL[referral]}
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>LinkedIn referral</DialogTitle>
+          <DialogDescription>
+            Track when you requested the referral and whether you followed up.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Status
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {REFERRAL_STATUSES.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setDraftReferral(r)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    draftReferral === r
+                      ? r === "NONE"
+                        ? "bg-muted text-foreground border-border"
+                        : REFERRAL_STATUS_STYLE[r]
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {REFERRAL_STATUS_LABEL[r]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label
+              htmlFor={`referral-date-${jobId}`}
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Sent date
+            </label>
+            <Input
+              id={`referral-date-${jobId}`}
+              type="date"
+              value={sentDate}
+              onChange={(e) => setSentDate(e.target.value)}
+              disabled={draftReferral === "NONE"}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={followUpSent}
+              onChange={(e) => setFollowUpSent(e.target.checked)}
+              disabled={draftReferral === "NONE"}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            Follow-up sent
+          </label>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ColdEmailDialog({
+  jobId,
+  userId,
+  entry,
+  onUpdated,
+}: {
+  jobId: string;
+  userId: string;
+  entry?: Entry;
+  onUpdated: (entry: EntryUpdate) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [sentDate, setSentDate] = React.useState(
+    dateInputValue(entry?.coldEmailSentAt),
+  );
+  const [followUpSent, setFollowUpSent] = React.useState(
+    entry?.coldEmailFollowUpSent ?? false,
+  );
+
+  React.useEffect(() => {
+    if (!open) return;
+    setSentDate(dateInputValue(entry?.coldEmailSentAt));
+    setFollowUpSent(entry?.coldEmailFollowUpSent ?? false);
+  }, [open, entry?.coldEmailSentAt, entry?.coldEmailFollowUpSent]);
+
+  async function save(nextSent: boolean) {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/entries", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jobId,
+          userId,
+          coldEmailSent: nextSent,
+          coldEmailSentAt: nextSent ? sentDate || todayInputValue() : null,
+          coldEmailFollowUpSent: nextSent ? followUpSent : false,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as Entry;
+      onUpdated({
+        id: data.id,
+        userId: data.userId,
+        status: data.status,
+        referral: data.referral,
+        referralSentAt: data.referralSentAt,
+        referralFollowUpSent: data.referralFollowUpSent,
+        coldEmailSent: data.coldEmailSent,
+        coldEmailSentAt: data.coldEmailSentAt,
+        coldEmailFollowUpSent: data.coldEmailFollowUpSent,
+        note: data.note,
+        updatedAt: new Date(data.updatedAt),
+      });
+      toast.success(data.coldEmailSent ? "Cold email marked sent" : "Cold email cleared");
+      setOpen(false);
+    } catch {
+      toast.error("Couldn't save cold email status");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const sent = entry?.coldEmailSent ?? false;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            sent
+              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40"
+              : "bg-muted/40 text-muted-foreground border-border",
+          )}
+          aria-label="Manage cold email"
+          title="Cold email / cold DM"
+        >
+          {sent ? <MailCheck className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
+          {sent ? "Cold sent" : "Cold email"}
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Cold email / DM</DialogTitle>
+          <DialogDescription>
+            Track the exact day you sent outreach and whether you followed up.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label
+              htmlFor={`cold-date-${jobId}`}
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Sent date
+            </label>
+            <Input
+              id={`cold-date-${jobId}`}
+              type="date"
+              value={sentDate}
+              onChange={(e) => setSentDate(e.target.value)}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={followUpSent}
+              onChange={(e) => setFollowUpSent(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            Follow-up sent
+          </label>
+        </div>
+        <div className="flex justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => save(false)}
+            disabled={saving || !sent}
+          >
+            Clear
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={() => save(true)} disabled={saving}>
+              {saving ? "Saving..." : "Save sent"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function JobInfoDialog({ job, users }: { job: Job; users: User[] }) {
+  const applied = users.filter((u) => {
+    const e = job.entries.find((x) => x.userId === u.id);
+    return (
+      e?.status === "APPLIED" ||
+      e?.status === "APPLIED_WITH_REFERRAL" ||
+      e?.status === "OFFER"
+    );
+  });
+  const referralRequested = users.filter((u) =>
+    job.entries.some((e) => e.userId === u.id && e.referral === "REQUESTED"),
+  );
+  const coldSent = users.filter((u) =>
+    job.entries.some((e) => e.userId === u.id && e.coldEmailSent),
+  );
+  const total =
+    applied.length + referralRequested.length + coldSent.length;
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="transition-opacity p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+          aria-label="View group activity"
+          title="View group activity"
+        >
+          <Info className="h-3.5 w-3.5" />
+          {total > 0 && (
+            <span className="sr-only">
+              {total} group activity updates
+            </span>
+          )}
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader className="min-w-0">
+          <DialogTitle>Group activity</DialogTitle>
+          <DialogDescription className="break-words">
+            {job.company} — {job.position || "Role"}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <ActivitySection title="Applied" users={applied} />
+          <ActivitySection
+            title="Requested LinkedIn referral"
+            users={referralRequested}
+          />
+          <ActivitySection title="Sent cold email / DM" users={coldSent} />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ActivitySection({ title, users }: { title: string; users: User[] }) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          {users.length}
+        </span>
+      </div>
+      {users.length === 0 ? (
+        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
+          No one yet.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {users.map((u) => (
+            <span
+              key={u.id}
+              className="inline-flex items-center gap-2 rounded-full border bg-muted/30 px-2 py-1 text-xs font-medium"
+            >
+              <Avatar className="h-5 w-5">
+                {u.image && <AvatarImage src={u.image} alt={u.displayName} />}
+                <AvatarFallback className="text-[9px]">
+                  {initials(u.displayName)}
+                </AvatarFallback>
+              </Avatar>
+              {u.displayName}
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function dateInputValue(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  if (typeof value === "string") return value.slice(0, 10);
+  return value.toISOString().slice(0, 10);
+}
+
+function todayInputValue(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function daysSince(value: Date | string | null | undefined): number | null {
+  if (!value) return null;
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86_400_000);
+}
+
+function getFollowUpSuggestions(
+  entry: Entry | undefined,
+  followUpDelayDays: number,
+): string[] {
+  if (!entry) return [];
+  const suggestions: string[] = [];
+  const referralDays = daysSince(entry.referralSentAt);
+  if (
+    entry.referral !== "NONE" &&
+    entry.referralSentAt &&
+    !entry.referralFollowUpSent &&
+    referralDays !== null &&
+    referralDays >= followUpDelayDays
+  ) {
+    suggestions.push(`LinkedIn referral (${referralDays}d)`);
+  }
+  const coldDays = daysSince(entry.coldEmailSentAt);
+  if (
+    entry.coldEmailSent &&
+    entry.coldEmailSentAt &&
+    !entry.coldEmailFollowUpSent &&
+    coldDays !== null &&
+    coldDays >= followUpDelayDays
+  ) {
+    suggestions.push(`cold email (${coldDays}d)`);
+  }
+  return suggestions;
+}
+
+function upsertEntry(entries: Entry[], next: EntryUpdate): Entry[] {
   const i = entries.findIndex((e) => e.userId === next.userId);
-  if (i === -1) return [...entries, next];
+  const normalized: Entry = {
+    id: next.id,
+    userId: next.userId,
+    status: next.status ?? "NONE",
+    referral: next.referral ?? "NONE",
+    referralSentAt: next.referralSentAt ?? null,
+    referralFollowUpSent: next.referralFollowUpSent ?? false,
+    coldEmailSent: next.coldEmailSent ?? false,
+    coldEmailSentAt: next.coldEmailSentAt ?? null,
+    coldEmailFollowUpSent: next.coldEmailFollowUpSent ?? false,
+    note: next.note ?? null,
+    updatedAt: next.updatedAt ?? new Date(),
+  };
+  if (i === -1) return [...entries, normalized];
   const copy = [...entries];
-  copy[i] = next;
+  copy[i] = {
+    ...copy[i],
+    ...next,
+    updatedAt: next.updatedAt ?? new Date(),
+  };
   return copy;
 }
 
@@ -710,6 +1234,11 @@ function upsertNote(
         userId,
         status: "NONE",
         referral: "NONE",
+        referralSentAt: null,
+        referralFollowUpSent: false,
+        coldEmailSent: false,
+        coldEmailSentAt: null,
+        coldEmailFollowUpSent: false,
         note,
         updatedAt: new Date(),
       },
@@ -772,6 +1301,3 @@ function CopyLinkButton({ link }: { link: string }) {
     </button>
   );
 }
-
-// Reference to avoid unused-import warning in some configs
-void HandHelping;

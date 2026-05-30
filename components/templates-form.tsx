@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { RotateCcw, Save, UserPlus, Handshake, Copy } from "lucide-react";
+import { RotateCcw, Save, UserPlus, Handshake, Copy, Bell } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -12,6 +12,7 @@ import {
 } from "./ui/card";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
+import { Input } from "./ui/input";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_CONNECTION_TEMPLATE,
@@ -28,6 +29,7 @@ export function TemplatesForm({
   previewLink,
   userName,
   userEmail,
+  initialFollowUpDelayDays,
 }: {
   initialConnection: string | null;
   initialReferral: string | null;
@@ -36,6 +38,7 @@ export function TemplatesForm({
   previewLink: string;
   userName: string;
   userEmail: string;
+  initialFollowUpDelayDays: number;
 }) {
   const [connection, setConnection] = React.useState(
     initialConnection ?? DEFAULT_CONNECTION_TEMPLATE,
@@ -43,7 +46,19 @@ export function TemplatesForm({
   const [referral, setReferral] = React.useState(
     initialReferral ?? DEFAULT_REFERRAL_TEMPLATE,
   );
+  const [savedConnection, setSavedConnection] = React.useState(
+    initialConnection ?? DEFAULT_CONNECTION_TEMPLATE,
+  );
+  const [savedReferral, setSavedReferral] = React.useState(
+    initialReferral ?? DEFAULT_REFERRAL_TEMPLATE,
+  );
   const [saving, setSaving] = React.useState(false);
+  const [followUpDelayDays, setFollowUpDelayDays] = React.useState(
+    initialFollowUpDelayDays,
+  );
+  const [savedFollowUpDelayDays, setSavedFollowUpDelayDays] = React.useState(
+    initialFollowUpDelayDays,
+  );
 
   const vars = {
     companyName: previewCompany,
@@ -53,11 +68,11 @@ export function TemplatesForm({
     userEmail,
   };
 
-  const connectionDirty =
-    connection !== (initialConnection ?? DEFAULT_CONNECTION_TEMPLATE);
-  const referralDirty =
-    referral !== (initialReferral ?? DEFAULT_REFERRAL_TEMPLATE);
+  const connectionDirty = connection !== savedConnection;
+  const referralDirty = referral !== savedReferral;
   const dirty = connectionDirty || referralDirty;
+  const settingsDirty = followUpDelayDays !== savedFollowUpDelayDays;
+  const anyDirty = dirty || settingsDirty;
 
   async function save() {
     setSaving(true);
@@ -69,6 +84,7 @@ export function TemplatesForm({
           connection === DEFAULT_CONNECTION_TEMPLATE ? null : connection,
         referralTemplate:
           referral === DEFAULT_REFERRAL_TEMPLATE ? null : referral,
+        followUpDelayDays,
       };
       const res = await fetch("/api/user/templates", {
         method: "PATCH",
@@ -76,6 +92,9 @@ export function TemplatesForm({
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(await res.text());
+      setSavedConnection(connection);
+      setSavedReferral(referral);
+      setSavedFollowUpDelayDays(followUpDelayDays);
       toast.success("Templates saved");
     } catch {
       toast.error("Couldn't save templates");
@@ -117,6 +136,44 @@ export function TemplatesForm({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Bell className="h-4 w-4" /> Follow-up timing
+          </CardTitle>
+          <CardDescription>
+            The board highlights referral and cold-email follow-ups after this
+            many days.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="max-w-xs space-y-1.5">
+            <label
+              htmlFor="followUpDelayDays"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Follow up after
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="followUpDelayDays"
+                type="number"
+                min={1}
+                max={30}
+                value={followUpDelayDays}
+                onChange={(e) =>
+                  setFollowUpDelayDays(
+                    Math.max(1, Math.min(30, Number(e.target.value) || 1)),
+                  )
+                }
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">days</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <TemplateEditor
         icon={<UserPlus className="h-4 w-4" />}
         title="Connection request"
@@ -141,12 +198,14 @@ export function TemplatesForm({
         <span
           className={cn(
             "text-xs mr-auto",
-            dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+            anyDirty
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-muted-foreground",
           )}
         >
-          {dirty ? "Unsaved changes" : "All changes saved"}
+          {anyDirty ? "Unsaved changes" : "All changes saved"}
         </span>
-        <Button onClick={save} disabled={saving || !dirty} size="sm">
+        <Button onClick={save} disabled={saving || !anyDirty} size="sm">
           <Save className="h-3.5 w-3.5 mr-1" />
           {saving ? "Saving…" : "Save"}
         </Button>
