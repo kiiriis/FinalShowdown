@@ -768,10 +768,21 @@ function ReferralTrackingDialog({
 
   React.useEffect(() => {
     if (!open) return;
-    setDraftReferral(entry?.referral ?? "NONE");
-    setSentDate(dateInputValue(entry?.referralSentAt));
+    const referral = entry?.referral ?? "NONE";
+    setDraftReferral(referral);
+    setSentDate(
+      dateInputValue(entry?.referralSentAt) ||
+        (referral === "NONE" ? "" : todayInputValue()),
+    );
     setFollowUpSent(entry?.referralFollowUpSent ?? false);
   }, [open, entry?.referral, entry?.referralSentAt, entry?.referralFollowUpSent]);
+
+  function selectReferralStatus(nextReferral: ReferralStatus) {
+    setDraftReferral(nextReferral);
+    setSentDate((current) =>
+      nextReferral === "NONE" ? "" : current || todayInputValue(),
+    );
+  }
 
   async function save() {
     setSaving(true);
@@ -865,7 +876,7 @@ function ReferralTrackingDialog({
                 <button
                   key={r}
                   type="button"
-                  onClick={() => setDraftReferral(r)}
+                  onClick={() => selectReferralStatus(r)}
                   className={cn(
                     "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
                     draftReferral === r
@@ -899,7 +910,12 @@ function ReferralTrackingDialog({
             <input
               type="checkbox"
               checked={followUpSent}
-              onChange={(e) => setFollowUpSent(e.target.checked)}
+              onChange={(e) => {
+                setFollowUpSent(e.target.checked);
+                if (e.target.checked) {
+                  setSentDate((current) => current || todayInputValue());
+                }
+              }}
               disabled={draftReferral === "NONE"}
               className="h-4 w-4 rounded border-border accent-primary"
             />
@@ -941,7 +957,7 @@ function ColdEmailDialog({
 
   React.useEffect(() => {
     if (!open) return;
-    setSentDate(dateInputValue(entry?.coldEmailSentAt));
+    setSentDate(dateInputValue(entry?.coldEmailSentAt) || todayInputValue());
     setFollowUpSent(entry?.coldEmailFollowUpSent ?? false);
   }, [open, entry?.coldEmailSentAt, entry?.coldEmailFollowUpSent]);
 
@@ -1033,7 +1049,12 @@ function ColdEmailDialog({
             <input
               type="checkbox"
               checked={followUpSent}
-              onChange={(e) => setFollowUpSent(e.target.checked)}
+              onChange={(e) => {
+                setFollowUpSent(e.target.checked);
+                if (e.target.checked) {
+                  setSentDate((current) => current || todayInputValue());
+                }
+              }}
               className="h-4 w-4 rounded border-border accent-primary"
             />
             Follow-up sent

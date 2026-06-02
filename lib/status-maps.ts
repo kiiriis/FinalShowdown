@@ -42,7 +42,7 @@ export const REFERRAL_STATUS_STYLE: Record<ReferralStatus, string> = {
   RECEIVED:
     "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
   NOT_NEEDED:
-    "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/30",
+    "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/40",
 };
 
 export const APP_STATUSES: AppStatus[] = [
