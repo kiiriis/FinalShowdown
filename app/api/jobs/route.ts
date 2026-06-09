@@ -69,6 +69,12 @@ export async function POST(req: Request) {
       linkNormalized,
       notes: parsed.data.notes ?? null,
       addedById: session.user.id,
+      entries: {
+        create: {
+          userId: session.user.id,
+          status: "APPLIED",
+        },
+      },
     },
   });
   emitChange("job.created", session.user.id);
