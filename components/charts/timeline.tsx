@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { useReducedMotion } from "framer-motion";
 
 const COLORS = ["#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#f43f5e"];
 
@@ -20,6 +21,7 @@ export function Timeline({
   data: Array<Record<string, string | number>>;
   users: Array<{ id: string; displayName: string }>;
 }) {
+  const reduce = useReducedMotion();
   if (data.length === 0) {
     return (
       <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
@@ -93,6 +95,10 @@ export function Timeline({
             fill={`url(#g-${u.id})`}
             strokeWidth={2}
             stackId="1"
+            isAnimationActive={!reduce}
+            animationBegin={0}
+            animationDuration={700}
+            animationEasing="ease-out"
           />
         ))}
       </AreaChart>

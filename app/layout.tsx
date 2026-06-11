@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { MotionProvider } from "@/components/motion-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -40,9 +41,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          <TooltipProvider delayDuration={200}>
-            {children}
-          </TooltipProvider>
+          <MotionProvider>
+            <TooltipProvider delayDuration={200}>
+              {children}
+            </TooltipProvider>
+          </MotionProvider>
           <Toaster
             position="bottom-right"
             toastOptions={{

@@ -159,12 +159,12 @@ export function JobsBoard({
         e.preventDefault();
         searchRef.current?.focus();
       } else if (e.key === "d" && !typing && !e.metaKey && !e.ctrlKey) {
-        window.location.href = "/dashboard";
+        router.push("/dashboard");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [router]);
 
   // When the add-job dialog detects a duplicate, it dispatches fs:jobs:focus
   // with the existing job's id. Clear every active filter (so the row is
@@ -340,17 +340,27 @@ export function JobsBoard({
     return result;
   }, [filtered, sort, mounted, visibleCount]);
 
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
   async function handleDelete(id: string) {
     if (!confirm("Delete this job? This also clears everyone's status.")) return;
     const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
     if (res.ok) {
-      setJobs((s) => s.filter((j) => j.id !== id));
+      // Let the row fade/slide out via its transition before removing it.
+      setDeletingId(id);
       toast.success("Job deleted");
-      router.refresh();
+      setTimeout(() => {
+        setJobs((s) => s.filter((j) => j.id !== id));
+        setDeletingId(null);
+        router.refresh();
+      }, 200);
     } else {
       toast.error("Couldn't delete");
     }
   }
+
+  // useDeferredValue lags behind while the filtered list recomputes — dim the
+  // table during that window so typing feels responsive instead of frozen.
+  const isStale = query !== deferredQuery;
 
   return (
     <div className="space-y-4">
@@ -440,27 +450,40 @@ export function JobsBoard({
         <span>
           {filtered.length} of {jobs.length} jobs
         </span>
-        <span>
+        <span className="hidden sm:inline">
           Press <kbd className="rounded bg-muted px-1">/</kbd> to search •{" "}
           <kbd className="rounded bg-muted px-1">N</kbd> to add •{" "}
           <kbd className="rounded bg-muted px-1">D</kbd> dashboard
         </span>
       </div>
 
-      <div className="rounded-xl border bg-card overflow-hidden">
+      {/* overflow-clip (not hidden) keeps the rounded-corner clipping without
+          creating a scroll container, so the sticky day headers still work */}
+      <div
+        className={cn(
+          "rounded-xl border bg-card overflow-clip transition-opacity duration-150",
+          isStale && "opacity-60",
+        )}
+      >
         <div className="hidden md:grid grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-4 px-4 py-2.5 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Company / Position</div>
           <div>My tracking</div>
           <div>Added</div>
           <div />
         </div>
+        {/* Keyed by the discrete filters (never the search query) so changing
+            them cross-fades the whole list instead of hard-jumping. */}
+        <div
+          key={`${myStatus}|${onlyReferrals}|${onlyUntouched}|${sort}`}
+          className="animate-in fade-in-0 duration-200"
+        >
         {filtered.length === 0 ? (
           <EmptyState />
         ) : (
           groups.map((group) => (
             <section key={group.key}>
               {group.label && (
-                <div className="flex items-center gap-2 px-4 py-2 border-b text-sm bg-gradient-to-r from-violet-500/10 via-sky-500/10 to-transparent">
+                <div className="sticky top-14 z-10 flex items-center gap-2 px-4 py-2 border-b text-sm bg-card/95 backdrop-blur bg-gradient-to-r from-violet-500/10 via-sky-500/10 to-transparent">
                   <CalendarDays className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
                   <span
                     className="font-semibold tabular-nums text-violet-700 dark:text-violet-200"
@@ -492,7 +515,11 @@ export function JobsBoard({
                   <li
                     key={job.id}
                     id={`job-${job.id}`}
-                    className="group grid md:grid-cols-[minmax(0,1fr)_420px_160px_120px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-all rounded-md"
+                    className={cn(
+                      "group grid md:grid-cols-[minmax(0,1fr)_420px_160px_120px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-all rounded-md",
+                      deletingId === job.id &&
+                        "opacity-0 -translate-x-1 pointer-events-none",
+                    )}
                   >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -642,7 +669,7 @@ export function JobsBoard({
                         />
                         <button
                           onClick={() => handleDelete(job.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                          className="can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity p-2 md:p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                           aria-label="Delete job"
                           title="Delete job"
                         >
@@ -657,6 +684,7 @@ export function JobsBoard({
             </section>
           ))
         )}
+        </div>
       </div>
       {filtered.length > visibleCount && (
         <div className="flex flex-col items-center gap-2 py-2">
@@ -843,7 +871,7 @@ function ReferralTrackingDialog({
         <button
           type="button"
           className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-[color,background-color,border-color,transform] active:scale-95 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
             referral === "NONE"
               ? "bg-muted/40 text-muted-foreground border-border"
               : REFERRAL_STATUS_STYLE[referral],
@@ -878,7 +906,7 @@ function ReferralTrackingDialog({
                   type="button"
                   onClick={() => selectReferralStatus(r)}
                   className={cn(
-                    "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    "rounded-full border px-2.5 py-1 text-xs font-medium transition-[color,background-color,border-color,transform] active:scale-95",
                     draftReferral === r
                       ? r === "NONE"
                         ? "bg-muted text-foreground border-border"
@@ -1007,7 +1035,7 @@ function ColdEmailDialog({
         <button
           type="button"
           className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-[color,background-color,border-color,transform] active:scale-95 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             sent
               ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40"
               : "bg-muted/40 text-muted-foreground border-border",
@@ -1106,7 +1134,7 @@ function JobInfoDialog({ job, users }: { job: Job; users: User[] }) {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="transition-opacity p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+          className="transition-opacity p-2 md:p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
           aria-label="View group activity"
           title="View group activity"
         >
@@ -1280,7 +1308,7 @@ function upsertNote(
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
+    <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in-0 zoom-in-95 duration-300">
       <div className="rounded-full bg-muted p-3 mb-3">
         <Inbox className="h-6 w-6 text-muted-foreground" />
       </div>

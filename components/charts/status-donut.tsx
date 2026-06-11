@@ -8,6 +8,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+import { useReducedMotion } from "framer-motion";
 import { AppStatus } from "@prisma/client";
 import { APP_STATUS_LABEL } from "@/lib/status-maps";
 
@@ -27,6 +28,7 @@ export function StatusDonut({
 }: {
   counts: Record<AppStatus, number>;
 }) {
+  const reduce = useReducedMotion();
   const data = (Object.keys(counts) as AppStatus[])
     .filter((k) => counts[k] > 0 && k !== "NONE")
     .map((k) => ({ name: APP_STATUS_LABEL[k], value: counts[k], key: k }));
@@ -50,6 +52,10 @@ export function StatusDonut({
           outerRadius={90}
           paddingAngle={2}
           strokeWidth={0}
+          isAnimationActive={!reduce}
+          animationBegin={0}
+          animationDuration={700}
+          animationEasing="ease-out"
         >
           {data.map((d) => (
             <Cell key={d.key} fill={COLORS[d.key]} />

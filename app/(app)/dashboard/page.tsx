@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Trophy, ExternalLink, HandHelping } from "lucide-react";
+import { KpiCard, KpiRow } from "@/components/dashboard/kpi-card";
 import { auth } from "@/lib/auth";
 import { getDashboardData } from "@/lib/data";
-import { Nav } from "@/components/nav";
 import {
   Card,
   CardContent,
@@ -40,10 +40,30 @@ export default async function DashboardPage() {
     (a, b) => b.totals.applied - a.totals.applied,
   );
 
+  // "This week" deltas from already-aggregated series — no extra queries.
+  const last7 = new Set<string>();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - i);
+    last7.add(d.toISOString().slice(0, 10));
+  }
+  const myAppliedThisWeek = data.applications.day
+    .filter((row) => last7.has(String(row.bucket)))
+    .reduce((sum, row) => sum + (Number(row[session.user.id]) || 0), 0);
+  const jobsAddedThisWeek = data.timeline
+    .filter((row) => last7.has(row.day))
+    .reduce(
+      (sum, row) =>
+        sum +
+        Object.entries(row).reduce(
+          (s, [k, v]) => (k === "day" ? s : s + (Number(v) || 0)),
+          0,
+        ),
+      0,
+    );
+
   return (
-    <>
-      <Nav user={session.user} />
-      <main className="container py-6 space-y-6">
+    <main className="container py-6 space-y-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight">
             Dashboard
@@ -54,35 +74,41 @@ export default async function DashboardPage() {
         </div>
 
         {/* KPI row */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <Kpi label="Total jobs" value={data.totalJobs} href="/" />
-          <Kpi
+        <KpiRow>
+          <KpiCard
+            label="Total jobs"
+            value={data.totalJobs}
+            href="/"
+            delta={{ value: jobsAddedThisWeek, label: "this week" }}
+          />
+          <KpiCard
             label="My applied"
             value={me?.totals.applied ?? 0}
             accent="sky"
             href="/?status=APPLIED"
+            delta={{ value: myAppliedThisWeek, label: "this week" }}
           />
-          <Kpi
+          <KpiCard
             label="My skipped"
             value={me?.totals.skipped ?? 0}
             accent="zinc"
             href="/?status=SKIPPED"
           />
-          <Kpi
+          <KpiCard
             label="My rejected"
             value={me?.totals.rejected ?? 0}
             accent="rose"
             href="/?status=REJECTED"
           />
-          <Kpi
+          <KpiCard
             label="My offers"
             value={me?.totals.offers ?? 0}
             accent="emerald"
             href="/?status=OFFER"
           />
-        </div>
+        </KpiRow>
 
-        <div className="grid lg:grid-cols-3 gap-4">
+        <div className="grid lg:grid-cols-3 gap-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 fill-mode-backwards [animation-delay:60ms]">
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle>My status breakdown</CardTitle>
@@ -119,7 +145,7 @@ export default async function DashboardPage() {
           </Card>
         </div>
 
-        <Card>
+        <Card className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 fill-mode-backwards [animation-delay:120ms]">
           <CardHeader>
             <CardTitle>Applications over time</CardTitle>
             <CardDescription>
@@ -137,7 +163,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 fill-mode-backwards [animation-delay:180ms]">
           <CardHeader>
             <CardTitle>Jobs added over time</CardTitle>
             <CardDescription>
@@ -166,7 +192,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="grid lg:grid-cols-2 gap-4">
+        <div className="grid lg:grid-cols-2 gap-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 fill-mode-backwards [animation-delay:240ms]">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -178,9 +204,11 @@ export default async function DashboardPage() {
               {leaderboard.map((p, i) => (
                 <div
                   key={p.user.id}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/40 transition-colors"
+                  className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/40 transition-colors animate-in fade-in-0 slide-in-from-bottom-1 duration-300 fill-mode-backwards"
+                  style={{ animationDelay: `${280 + i * 40}ms` }}
                 >
                   <span
+                    aria-label={`Rank ${i + 1}`}
                     className={
                       "w-6 text-center text-sm font-semibold " +
                       (i === 0
@@ -280,52 +308,6 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </>
+    </main>
   );
-}
-
-function Kpi({
-  label,
-  value,
-  accent,
-  href,
-}: {
-  label: string;
-  value: number;
-  accent?: "sky" | "zinc" | "rose" | "emerald" | "violet";
-  href?: string;
-}) {
-  const color =
-    accent === "sky"
-      ? "from-sky-500/20 to-sky-500/5 text-sky-600 dark:text-sky-300"
-      : accent === "zinc"
-        ? "from-zinc-500/20 to-zinc-500/5 text-zinc-600 dark:text-zinc-300"
-        : accent === "rose"
-          ? "from-rose-500/20 to-rose-500/5 text-rose-600 dark:text-rose-300"
-          : accent === "emerald"
-            ? "from-emerald-500/20 to-emerald-500/5 text-emerald-600 dark:text-emerald-300"
-            : "from-violet-500/20 to-violet-500/5 text-violet-600 dark:text-violet-300";
-  const body = (
-    <>
-      <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        {label}
-      </div>
-      <div className="mt-1 text-3xl font-display font-semibold tabular-nums">
-        {value}
-      </div>
-    </>
-  );
-  const classes = `relative rounded-xl border p-4 overflow-hidden bg-gradient-to-br ${color}`;
-  if (href) {
-    return (
-      <Link
-        href={href}
-        className={`${classes} block transition-transform hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-      >
-        {body}
-      </Link>
-    );
-  }
-  return <div className={classes}>{body}</div>;
 }

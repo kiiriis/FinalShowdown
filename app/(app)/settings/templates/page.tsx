@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { Nav } from "@/components/nav";
 import { TemplatesForm } from "@/components/templates-form";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +23,7 @@ export default async function TemplatesPage() {
   if (!user) redirect("/login");
 
   return (
-    <>
-      <Nav user={session.user} />
-      <main className="container py-6 space-y-6 max-w-3xl">
+    <main className="container py-6 space-y-6 max-w-3xl">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight">
             Message <span className="gradient-text">templates</span>
@@ -46,7 +43,6 @@ export default async function TemplatesPage() {
           userEmail={user.email}
           initialFollowUpDelayDays={user.followUpDelayDays}
         />
-      </main>
-    </>
+    </main>
   );
 }

@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 const config: Config = {
   darkMode: "class",
@@ -79,7 +80,12 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // can-hover: only applies on devices with a real pointer — lets us keep
+    // hover-revealed actions on desktop while showing them always on touch.
+    plugin(({ addVariant }) => addVariant("can-hover", "@media (hover: hover)")),
+  ],
 };
 
 export default config;

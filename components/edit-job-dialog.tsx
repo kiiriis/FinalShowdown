@@ -105,7 +105,7 @@ export function EditJobDialog({ job, onSaved }: Props) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+          className="can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity p-2 md:p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
           aria-label="Edit job"
           title="Edit job"
         >
@@ -122,23 +122,59 @@ export function EditJobDialog({ job, onSaved }: Props) {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="company">Company</Label>
-            <Input id="company" {...register("company")} autoFocus />
+            <Input
+              id="company"
+              aria-invalid={!!errors.company}
+              aria-describedby={errors.company ? "edit-company-error" : undefined}
+              {...register("company")}
+              autoFocus
+            />
             {errors.company && (
-              <p className="text-xs text-rose-500">{errors.company.message}</p>
+              <p
+                id="edit-company-error"
+                role="alert"
+                className="text-xs text-rose-500 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+              >
+                {errors.company.message}
+              </p>
             )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="position">Position</Label>
-            <Input id="position" {...register("position")} />
+            <Input
+              id="position"
+              aria-invalid={!!errors.position}
+              aria-describedby={
+                errors.position ? "edit-position-error" : undefined
+              }
+              {...register("position")}
+            />
             {errors.position && (
-              <p className="text-xs text-rose-500">{errors.position.message}</p>
+              <p
+                id="edit-position-error"
+                role="alert"
+                className="text-xs text-rose-500 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+              >
+                {errors.position.message}
+              </p>
             )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="link">Link</Label>
-            <Input id="link" {...register("link")} />
+            <Input
+              id="link"
+              aria-invalid={!!errors.link}
+              aria-describedby={errors.link ? "edit-link-error" : undefined}
+              {...register("link")}
+            />
             {errors.link && (
-              <p className="text-xs text-rose-500">{errors.link.message}</p>
+              <p
+                id="edit-link-error"
+                role="alert"
+                className="text-xs text-rose-500 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+              >
+                {errors.link.message}
+              </p>
             )}
           </div>
           <div className="space-y-1.5">

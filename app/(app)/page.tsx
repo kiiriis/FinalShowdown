@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { auth, isAdminEmail } from "@/lib/auth";
 import { getAllJobs, getAllUsers } from "@/lib/data";
 import { prisma } from "@/lib/db";
-import { Nav } from "@/components/nav";
 import { JobsBoard } from "@/components/jobs-board";
 import { WhatsNewBanner } from "@/components/whats-new-banner";
 
@@ -28,9 +27,7 @@ export default async function HomePage() {
   ]);
 
   return (
-    <>
-      <Nav user={session.user} />
-      <main className="container py-6 space-y-6">
+    <main className="container py-6 space-y-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight">
@@ -68,7 +65,6 @@ export default async function HomePage() {
               : null
           }
         />
-      </main>
-    </>
+    </main>
   );
 }

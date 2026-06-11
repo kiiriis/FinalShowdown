@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { useReducedMotion } from "framer-motion";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const COLORS = ["#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#f43f5e"];
@@ -27,6 +28,14 @@ export function ApplicationsOverTime({
 }) {
   const [granularity, setGranularity] = React.useState<Granularity>("day");
   const data = series[granularity];
+  const reduce = useReducedMotion();
+  // animationBegin stays 0 on every series — staggering stacked bars desyncs them
+  const anim = {
+    isAnimationActive: !reduce,
+    animationBegin: 0,
+    animationDuration: 700,
+    animationEasing: "ease-out" as const,
+  };
 
   const empty = data.length === 0;
   // Sum per-user totals across visible range — shown as subtle footnote.
@@ -111,6 +120,7 @@ export function ApplicationsOverTime({
                 radius={
                   i === users.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]
                 }
+                {...anim}
               />
             ))}
           </BarChart>

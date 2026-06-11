@@ -136,7 +136,7 @@ export function MessageTemplateDialog({
             // once used (or on second page load), fall back to hover-reveal.
             showNewDot
               ? "opacity-100"
-              : "opacity-0 group-hover:opacity-100",
+              : "can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100",
           )}
           aria-label={tooltip}
           title={tooltip}

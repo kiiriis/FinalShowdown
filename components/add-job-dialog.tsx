@@ -130,11 +130,19 @@ export function AddJobDialog({ triggerClassName }: { triggerClassName?: string }
             <Input
               id="company"
               placeholder="Stripe"
+              aria-invalid={!!errors.company}
+              aria-describedby={errors.company ? "company-error" : undefined}
               {...register("company")}
               autoFocus
             />
             {errors.company && (
-              <p className="text-xs text-rose-500">{errors.company.message}</p>
+              <p
+                id="company-error"
+                role="alert"
+                className="text-xs text-rose-500 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+              >
+                {errors.company.message}
+              </p>
             )}
           </div>
           <div className="space-y-1.5">
@@ -142,10 +150,18 @@ export function AddJobDialog({ triggerClassName }: { triggerClassName?: string }
             <Input
               id="position"
               placeholder="Software Engineer, New Grad"
+              aria-invalid={!!errors.position}
+              aria-describedby={errors.position ? "position-error" : undefined}
               {...register("position")}
             />
             {errors.position && (
-              <p className="text-xs text-rose-500">{errors.position.message}</p>
+              <p
+                id="position-error"
+                role="alert"
+                className="text-xs text-rose-500 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+              >
+                {errors.position.message}
+              </p>
             )}
           </div>
           <div className="space-y-1.5">
@@ -153,10 +169,18 @@ export function AddJobDialog({ triggerClassName }: { triggerClassName?: string }
             <Input
               id="link"
               placeholder="https://…"
+              aria-invalid={!!errors.link}
+              aria-describedby={errors.link ? "link-error" : undefined}
               {...register("link")}
             />
             {errors.link && (
-              <p className="text-xs text-rose-500">{errors.link.message}</p>
+              <p
+                id="link-error"
+                role="alert"
+                className="text-xs text-rose-500 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+              >
+                {errors.link.message}
+              </p>
             )}
           </div>
           <div className="space-y-1.5">

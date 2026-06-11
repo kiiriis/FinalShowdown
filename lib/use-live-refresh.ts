@@ -37,7 +37,9 @@ export function useLiveRefresh(currentUserId?: string) {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
 
-    const refresh = () => router.refresh();
+    // startTransition keeps the re-render concurrent so an SSE-triggered
+    // refresh doesn't visibly jank whatever the user is doing mid-interaction.
+    const refresh = () => React.startTransition(() => router.refresh());
 
     const connect = () => {
       if (closed) return;

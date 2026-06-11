@@ -129,7 +129,7 @@ export function TemplatesForm({
                 title={p.description}
               >
                 {p.token}
-                <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Copy className="h-3 w-3 can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-opacity" />
               </button>
             ))}
           </div>

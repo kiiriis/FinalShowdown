@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DURATION, EASE_OUT } from "@/lib/motion";
 import {
   APP_STATUSES,
   APP_STATUS_LABEL,
@@ -119,9 +120,11 @@ export function StatusPill({
       key={local.status}
       initial={{ scale: 0.85, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.15 }}
+      whileTap={editable ? { scale: 0.96 } : undefined}
+      transition={{ duration: DURATION.fast, ease: EASE_OUT }}
       className={pillClass}
     >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
       {APP_STATUS_LABEL[local.status]}
     </motion.span>
   );
