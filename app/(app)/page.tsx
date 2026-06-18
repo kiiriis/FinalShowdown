@@ -3,7 +3,7 @@ import { auth, isAdminEmail } from "@/lib/auth";
 import { getAllJobs, getAllUsers } from "@/lib/data";
 import { prisma } from "@/lib/db";
 import { JobsBoard } from "@/components/jobs-board";
-import { WhatsNewBanner } from "@/components/whats-new-banner";
+import { DbNoticeBanner } from "@/components/db-notice-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ export default async function HomePage() {
             </p>
           </div>
         </div>
-        <WhatsNewBanner />
+        <DbNoticeBanner />
         <JobsBoard
           jobs={jobs.map((j) => ({
             ...j,
