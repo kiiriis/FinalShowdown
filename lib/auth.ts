@@ -70,10 +70,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
     async jwt({ token, user }) {
-      if (user?.email) {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: user.email.toLowerCase() },
-        });
+      // Resolve uid from the DB by email on every call (not just sign-in) so a
+      // stale uid — e.g. a session minted before the Supabase migration, whose
+      // token still holds the old database's user id — self-heals to the
+      // current row instead of failing FK checks on writes.
+      const email = (user?.email ?? token.email)?.toLowerCase();
+      if (email) {
+        const dbUser = await prisma.user.findUnique({ where: { email } });
         if (dbUser) {
           token.uid = dbUser.id;
           token.displayName = dbUser.displayName;
