@@ -25,8 +25,8 @@ export default async function TemplatesPage() {
   return (
     <main className="container py-6 space-y-6 max-w-3xl">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight">
-            Message <span className="gradient-text">templates</span>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-tight">
+            Message templates
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Customize the LinkedIn messages you copy from each job row.

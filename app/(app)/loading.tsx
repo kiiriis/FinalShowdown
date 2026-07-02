@@ -28,7 +28,7 @@ export default function JobsLoading() {
             <Skeleton className="h-4 w-16" />
             <div />
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 border-b bg-gradient-to-r from-violet-500/10 via-sky-500/10 to-transparent">
+          <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted">
             <Skeleton className="h-4 w-40" />
             <Skeleton className="ml-auto h-5 w-16 rounded-full" />
           </div>

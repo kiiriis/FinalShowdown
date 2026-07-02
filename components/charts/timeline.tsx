@@ -11,8 +11,8 @@ import {
   Legend,
 } from "recharts";
 import { useReducedMotion } from "framer-motion";
-
-const COLORS = ["#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#f43f5e"];
+import { userSeriesColor } from "@/lib/chart-colors";
+import { ChartTooltip } from "./chart-tooltip";
 
 export function Timeline({
   data,
@@ -44,12 +44,12 @@ export function Timeline({
             >
               <stop
                 offset="5%"
-                stopColor={COLORS[i % COLORS.length]}
+                stopColor={userSeriesColor(i)}
                 stopOpacity={0.45}
               />
               <stop
                 offset="95%"
-                stopColor={COLORS[i % COLORS.length]}
+                stopColor={userSeriesColor(i)}
                 stopOpacity={0}
               />
             </linearGradient>
@@ -76,13 +76,8 @@ export function Timeline({
           allowDecimals={false}
         />
         <Tooltip
-          contentStyle={{
-            background: "hsl(var(--popover))",
-            border: "1px solid hsl(var(--border))",
-            borderRadius: 8,
-            fontSize: 12,
-          }}
-          labelFormatter={(l) => `Day ${l}`}
+          cursor={{ stroke: "hsl(var(--border))" }}
+          content={<ChartTooltip />}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
         {users.map((u, i) => (
@@ -91,7 +86,7 @@ export function Timeline({
             type="monotone"
             dataKey={u.id}
             name={u.displayName}
-            stroke={COLORS[i % COLORS.length]}
+            stroke={userSeriesColor(i)}
             fill={`url(#g-${u.id})`}
             strokeWidth={2}
             stackId="1"

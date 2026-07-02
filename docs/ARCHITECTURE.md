@@ -27,7 +27,7 @@ Three tables, one compound unique key. That's the whole thing.
 - **Job** — one row per posting. Link is `UNIQUE`, so duplicate imports and duplicate POSTs collapse automatically.
 - **JobEntry** — one row per `(job, user)` pair. Holds that user's application status and referral state. `@@unique([jobId, userId])` guarantees there's never more than one.
 
-Why a separate `JobEntry` instead of "Krish Status / Murtaza Status / …" columns on `Job`? Because adding a 5th or 6th friend is then a data change, not a schema change. Same reason we don't hard-code the user list.
+Why a separate `JobEntry` instead of "Alice Status / Bob Status / …" columns on `Job`? Because adding a 5th or 6th friend is then a data change, not a schema change. Same reason we don't hard-code the user list.
 
 Enums:
 
@@ -94,7 +94,7 @@ All API routes start with `const session = await auth();` and return 401 if ther
 
 All `components/ui/*` files are shadcn-style wrappers over Radix primitives. They're checked into the repo rather than installed as a dependency so we can tweak them freely. Styling uses Tailwind + `class-variance-authority` for variant handling and `tailwind-merge` via `cn()` for safe class composition.
 
-Theming is driven by `next-themes` (see `components/theme-provider.tsx`). The `<html>` element gets a `class="dark"` or `"light"` so Tailwind's `dark:` variants work.
+Theming is driven by `next-themes` (see `components/theme-provider.tsx`). There are three first-class themes — `light` (Paper), `graphite` (Graphite), and `dark` (Carbon) — applied as a class on `<html>`. Graphite and Carbon are both dark-family: `tailwind.config.ts` uses a custom `darkMode` variant so `dark:` utilities match either class. Design tokens live in `app/globals.css`; the visual system is documented in [`DESIGN.md`](../DESIGN.md), and chart colors are centralized in `lib/chart-colors.ts` (a CVD-validated palette).
 
 ---
 

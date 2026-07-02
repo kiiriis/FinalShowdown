@@ -2,7 +2,8 @@ import type { Config } from "tailwindcss";
 import plugin from "tailwindcss/plugin";
 
 const config: Config = {
-  darkMode: "class",
+  // Graphite is a second dark-family theme: dark: variants apply to both.
+  darkMode: ["variant", ["&:is(.dark, .dark *)", "&:is(.graphite, .graphite *)"]],
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
@@ -18,6 +19,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui"],
         display: ["var(--font-display)", "ui-sans-serif", "system-ui"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -53,6 +55,8 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Reward color — leader, offers, the trophy. Keep scarce.
+        gold: "hsl(var(--gold))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -72,11 +76,16 @@ const config: Config = {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        "grow-x": {
+          from: { transform: "scaleX(0)" },
+          to: { transform: "scaleX(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         shimmer: "shimmer 2.5s linear infinite",
+        "grow-x": "grow-x 0.6s cubic-bezier(0.16, 1, 0.3, 1) both",
       },
     },
   },

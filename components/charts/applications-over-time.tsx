@@ -13,8 +13,8 @@ import {
 } from "recharts";
 import { useReducedMotion } from "framer-motion";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-const COLORS = ["#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#f43f5e"];
+import { userSeriesColor } from "@/lib/chart-colors";
+import { ChartTooltip } from "./chart-tooltip";
 
 type Granularity = "day" | "week" | "month";
 type Row = Record<string, string | number>;
@@ -101,13 +101,12 @@ export function ApplicationsOverTime({
               allowDecimals={false}
             />
             <Tooltip
-              contentStyle={{
-                background: "hsl(var(--popover))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              labelFormatter={(l) => formatTooltipLabel(String(l), granularity)}
+              cursor={{ fill: "hsl(var(--foreground) / 0.06)" }}
+              content={
+                <ChartTooltip
+                  formatLabel={(l) => formatTooltipLabel(String(l), granularity)}
+                />
+              }
             />
             <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
             {users.map((u, i) => (
@@ -116,7 +115,7 @@ export function ApplicationsOverTime({
                 dataKey={u.id}
                 name={u.displayName}
                 stackId="apps"
-                fill={COLORS[i % COLORS.length]}
+                fill={userSeriesColor(i)}
                 radius={
                   i === users.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]
                 }

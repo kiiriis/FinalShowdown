@@ -111,7 +111,7 @@ export function AddJobDialog({ triggerClassName }: { triggerClassName?: string }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="gradient" className={triggerClassName}>
+        <Button className={triggerClassName}>
           <Plus className="h-4 w-4 mr-1" />
           Add job
           <kbd className="ml-2 rounded bg-white/20 px-1 text-[10px]">N</kbd>
@@ -121,7 +121,7 @@ export function AddJobDialog({ triggerClassName }: { triggerClassName?: string }
         <DialogHeader>
           <DialogTitle>Add a new job</DialogTitle>
           <DialogDescription>
-            Paste the link and fill in basics. It'll show up for everyone.
+            Paste the link and fill in basics. It’ll show up for everyone.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

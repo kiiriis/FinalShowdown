@@ -109,7 +109,7 @@ Open [http://localhost:3000](http://localhost:3000) and sign in with an allowlis
 app/                     Next.js App Router
   layout.tsx             Theme provider, top nav, toaster
   page.tsx               Jobs board (home)
-  dashboard/page.tsx     KPIs, charts, leaderboard, referral queue
+  dashboard/page.tsx     KPIs, charts, standings, referral queue
   login/page.tsx         Google sign-in
   api/
     auth/[...nextauth]/  NextAuth handler
@@ -140,12 +140,13 @@ prisma/
   migrations/            Checked in — Render runs `migrate deploy` against these
 
 scripts/
-  seed-from-csv.ts       Idempotent CSV importer
+  seed-from-csv.ts       Idempotent CSV importer (config in seed.config.json)
+  *.ts                   One-off maintenance tools — each has a doc comment
 
 types/
   next-auth.d.ts         Session shape augmentation
 
-Final Showdown - Applications.csv   Source data for the seed
+seed.config.example.json Template for the CSV importer's column mapping
 ```
 
 Architecture deep-dive: [ARCHITECTURE.md](ARCHITECTURE.md).

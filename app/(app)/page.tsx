@@ -29,11 +29,11 @@ export default async function HomePage() {
     <main className="container py-6 space-y-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight">
-              The <span className="gradient-text">Final Showdown</span>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-tight">
+              The Board
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Track every application. See who's ahead. Ask for referrals.
+              Track every application. See who’s ahead. Ask for referrals.
             </p>
           </div>
         </div>

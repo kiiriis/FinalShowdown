@@ -1,14 +1,28 @@
-# Seeding from the CSV
+# Seeding from a CSV
 
-The repo ships with `Final Showdown - Applications.csv` — the original Google Sheet export. `npm run seed` reads that file and writes `User`, `Job`, and `JobEntry` rows into Postgres.
+If your group is migrating from a shared spreadsheet, `npm run seed` imports it: it reads a CSV export and writes `User`, `Job`, and `JobEntry` rows into Postgres.
+
+The importer is configured by `seed.config.json` (gitignored — copy [`seed.config.example.json`](../seed.config.example.json)):
+
+```json
+{
+  "csvPath": "applications.csv",
+  "users": [
+    { "displayName": "Alice", "statusColumn": "Alice Status", "referralColumn": "Alice Referral" },
+    { "displayName": "Bob",   "statusColumn": "Bob Status",   "referralColumn": "Bob's Referral Status" }
+  ]
+}
+```
+
+`csvPath` is relative to the repo root. Each `users` entry maps a person to the CSV columns holding their application status and referral state — column names are matched exactly against the CSV header, and the seeder fails fast if one is missing.
 
 ---
 
 ## What the seeder does
 
-1. **Ensures users exist.** Upserts four `User` rows (Krish, Murtaza, Stavan, Parth) using the mapping in `USER_DISPLAY_NAMES`. If a name has no email override, a placeholder `<name>@final-showdown.local` is used — the row will be updated the first time that person signs in with Google.
+1. **Ensures users exist.** Upserts one `User` row per person in `seed.config.json`, resolving emails from `USER_DISPLAY_NAMES`. If a name has no email override, a placeholder `<name>@final-showdown.local` is used — the row will be updated the first time that person signs in with Google.
 2. **Ensures the admin user exists.** Upserts `ADMIN_SEED_EMAIL`. Imported jobs are recorded as added by this user.
-3. **Parses the CSV.** Headers are assumed to be the originals: `Company`, `Position`, `Link`, `Krish Status`, `Murtaza Status`, `Stavan's Status`, `Parth's Status`, `Krish Referral`, `Murtaza Referral`, `Stavan's Referral Status`, `Parth's Referral`.
+3. **Parses the CSV.** The `Company`, `Position`, and `Link` columns are required; per-user status/referral columns come from `seed.config.json`.
 4. **For each row:**
    - Finds the `Job` by `link`. If it doesn't exist, creates it.
    - For each user, parses their status + referral columns. If both are effectively empty, skips. Otherwise, **upserts** a `JobEntry`.
@@ -21,7 +35,7 @@ The repo ships with `Final Showdown - Applications.csv` — the original Google 
 - **Existing rows already in the DB** → the Job is matched by link and left alone. The Job's company/position/notes are **not** overwritten by the CSV. ✅
 - **Existing JobEntries** → **overwritten** with whatever the CSV says. ⚠️
 
-That last point matters. If Krish updated his status in the UI from "Applied" to "Offer", and the CSV still shows "Applied", re-running the seeder will revert his entry to "Applied".
+That last point matters. If Alice updated her status in the UI from "Applied" to "Offer", and the CSV still shows "Applied", re-running the seeder will revert her entry to "Applied".
 
 ---
 

@@ -11,6 +11,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useReducedMotion } from "framer-motion";
+import { STATUS_CHART_COLORS } from "@/lib/chart-colors";
+import { ChartTooltip } from "./chart-tooltip";
 
 type Row = {
   name: string;
@@ -53,47 +55,42 @@ export function UserBar({ data }: { data: Row[] }) {
           allowDecimals={false}
         />
         <Tooltip
-          cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-          contentStyle={{
-            background: "hsl(var(--popover))",
-            border: "1px solid hsl(var(--border))",
-            borderRadius: 8,
-            fontSize: 12,
-          }}
+          cursor={{ fill: "hsl(var(--foreground) / 0.06)" }}
+          content={<ChartTooltip />}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
         <Bar
           dataKey="Applied"
           stackId="a"
-          fill="#0ea5e9"
+          fill={STATUS_CHART_COLORS.APPLIED}
           radius={[2, 2, 0, 0]}
           {...anim}
         />
         <Bar
           dataKey="Referred"
           stackId="a"
-          fill="#8b5cf6"
+          fill={STATUS_CHART_COLORS.APPLIED_WITH_REFERRAL}
           radius={[2, 2, 0, 0]}
           {...anim}
         />
         <Bar
           dataKey="Skipped"
           stackId="a"
-          fill="#71717a"
+          fill={STATUS_CHART_COLORS.SKIPPED}
           radius={[2, 2, 0, 0]}
           {...anim}
         />
         <Bar
           dataKey="Rejected"
           stackId="a"
-          fill="#f43f5e"
+          fill={STATUS_CHART_COLORS.REJECTED}
           radius={[2, 2, 0, 0]}
           {...anim}
         />
         <Bar
           dataKey="Offer"
           stackId="a"
-          fill="#10b981"
+          fill={STATUS_CHART_COLORS.OFFER}
           radius={[2, 2, 0, 0]}
           {...anim}
         />

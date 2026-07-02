@@ -13,50 +13,81 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <div className="relative min-h-screen overflow-hidden flex items-center justify-center p-6">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-40 -right-40 h-[520px] w-[520px] rounded-full bg-violet-500/20 blur-3xl" />
-        <div className="absolute -bottom-32 -left-32 h-[520px] w-[520px] rounded-full bg-sky-500/20 blur-3xl" />
-      </div>
-      <div className="w-full max-w-md rounded-2xl border bg-card/70 backdrop-blur-xl p-8 shadow-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="rounded-xl bg-gradient-to-br from-violet-500 to-sky-500 p-2.5 text-white shadow-lg">
-            <Trophy className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="font-display text-xl font-semibold tracking-tight">
-              Final Showdown
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Job tracker for the crew
-            </p>
-          </div>
-        </div>
-        <h2 className="text-2xl font-semibold tracking-tight mb-1">
-          Sign in to compete
-        </h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          Only invited emails can get in. Use your allow-listed Google account.
-        </p>
-        <form
-          action={async () => {
-            "use server";
-            await signIn("google", { redirectTo: "/" });
+    <div className="relative isolate min-h-screen overflow-hidden flex flex-col">
+      {/* Starting grid: five lanes, one per racer. Fades out below the fold. */}
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 [mask-image:linear-gradient(to_bottom,black,transparent_75%)]"
+        aria-hidden
+      >
+        <div
+          className="absolute inset-0 opacity-70"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px)",
+            backgroundSize: "20% 100%",
+            backgroundPosition: "-1px 0",
           }}
-        >
-          <Button type="submit" className="w-full" size="lg">
-            <GoogleIcon className="h-4 w-4 mr-2" />
-            Continue with Google
-          </Button>
-        </form>
-        {error && (
-          <p className="mt-4 text-sm text-rose-500">
-            {error === "AccessDenied"
-              ? "That email isn't on the invite list. Ask an admin to add you."
-              : "Something went wrong. Please try again."}
-          </p>
-        )}
+        />
+        <div className="grid grid-cols-5 pt-3 font-mono text-[10px] tracking-widest text-muted-foreground/60">
+          {["P1", "P2", "P3", "P4", "P5"].map((p) => (
+            <span key={p} className="text-center">
+              {p}
+            </span>
+          ))}
+        </div>
       </div>
+
+      <main className="flex flex-1 items-center justify-center p-6">
+        <div className="w-full max-w-sm">
+          <div className="flex items-center gap-2.5 mb-10 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 fill-mode-backwards">
+            <span className="rounded-md bg-primary p-1.5 text-primary-foreground">
+              <Trophy className="h-4 w-4" />
+            </span>
+            <span className="font-display text-[15px] font-bold tracking-tight">
+              Final Showdown
+            </span>
+          </div>
+
+          <h1 className="font-display text-4xl font-bold tracking-tight leading-[1.05] animate-in fade-in-0 slide-in-from-bottom-2 duration-300 fill-mode-backwards [animation-delay:60ms]">
+            Five friends.
+            <br />
+            One job market.
+          </h1>
+          <p className="mt-3 text-sm text-muted-foreground animate-in fade-in-0 slide-in-from-bottom-2 duration-300 fill-mode-backwards [animation-delay:120ms]">
+            One shared board for every application, referral, and follow-up —
+            and a live scoreboard to keep it honest.
+          </p>
+
+          <form
+            className="mt-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 fill-mode-backwards [animation-delay:180ms]"
+            action={async () => {
+              "use server";
+              await signIn("google", { redirectTo: "/" });
+            }}
+          >
+            <Button type="submit" className="w-full" size="lg">
+              <GoogleIcon className="h-4 w-4 mr-2" />
+              Continue with Google
+            </Button>
+          </form>
+
+          {error ? (
+            <p className="mt-4 text-sm text-destructive">
+              {error === "AccessDenied"
+                ? "That email isn't on the league list. Ask an admin to add you."
+                : "Something went wrong. Please try again."}
+            </p>
+          ) : (
+            <p className="mt-4 text-xs text-muted-foreground animate-in fade-in-0 duration-300 fill-mode-backwards [animation-delay:240ms]">
+              Invite-only — sign in with your allow-listed Google account.
+            </p>
+          )}
+        </div>
+      </main>
+
+      <footer className="p-6 text-center font-mono text-[10px] tracking-widest text-muted-foreground/60">
+        PRIVATE LEAGUE · EST. 2026 · MAY THE BEST APPLICANT WIN
+      </footer>
     </div>
   );
 }
@@ -65,20 +96,8 @@ function GoogleIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
       <path
-        fill="#EA4335"
+        fill="currentColor"
         d="M12 10.2v3.9h5.5c-.2 1.3-1.6 3.8-5.5 3.8-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.9 3.3 14.7 2.3 12 2.3 6.5 2.3 2.1 6.8 2.1 12.3s4.4 10 9.9 10c5.7 0 9.5-4 9.5-9.7 0-.7-.1-1.2-.2-1.7H12z"
-      />
-      <path
-        fill="#34A853"
-        d="M3.9 7.3l3.2 2.4C8 7.9 9.9 6.8 12 6.8c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.9 3.3 14.7 2.3 12 2.3 8.2 2.3 4.9 4.3 3.9 7.3z"
-      />
-      <path
-        fill="#4A90E2"
-        d="M12 22.3c2.7 0 5-.9 6.6-2.4l-3.1-2.5c-.8.6-2 1-3.5 1-2.7 0-5-1.8-5.8-4.3l-3.2 2.5C4.3 20 7.8 22.3 12 22.3z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M6.2 14.1c-.2-.6-.3-1.2-.3-1.8s.1-1.2.3-1.8L3 8c-.7 1.3-1.1 2.8-1.1 4.3 0 1.5.4 3 1.1 4.3l3.2-2.5z"
       />
     </svg>
   );

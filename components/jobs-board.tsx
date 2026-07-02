@@ -49,6 +49,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
   APP_STATUSES,
   APP_STATUS_LABEL,
@@ -127,6 +128,12 @@ export function JobsBoard({
   );
   const [onlyReferrals, setOnlyReferrals] = React.useState(false);
   const [onlyUntouched, setOnlyUntouched] = React.useState(false);
+  // Date-range filter on the day the job was added (local timezone, inclusive
+  // bounds; either side may be open-ended). Only ever set client-side, so it
+  // can't cause an SSR/client hydration mismatch.
+  const [dateFrom, setDateFrom] = React.useState("");
+  const [dateTo, setDateTo] = React.useState("");
+  const dateActive = Boolean(dateFrom || dateTo);
   // Day-grouping uses the viewer's local timezone. We only turn it on after
   // mount so SSR (server TZ) and first client render match — otherwise jobs
   // near a day boundary would land in different buckets and React would throw
@@ -143,7 +150,7 @@ export function JobsBoard({
   // filters could leave a huge window open or hide results behind the cap.
   React.useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [deferredQuery, myStatus, onlyReferrals, onlyUntouched, sort]);
+  }, [deferredQuery, myStatus, onlyReferrals, onlyUntouched, sort, dateFrom, dateTo]);
 
   const searchIndex = React.useMemo(
     () => new Map(jobs.map((j) => [j.id, buildSearchText(j)])),
@@ -179,6 +186,8 @@ export function JobsBoard({
       setMyStatus("ALL");
       setOnlyReferrals(false);
       setOnlyUntouched(false);
+      setDateFrom("");
+      setDateTo("");
       setVisibleCount(Math.max(PAGE_SIZE, initialJobs.length));
       setFocusedJobId(detail.jobId);
     };
@@ -195,14 +204,14 @@ export function JobsBoard({
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.classList.add(
           "ring-2",
-          "ring-amber-500",
+          "ring-primary",
           "ring-offset-2",
           "ring-offset-background",
         );
         setTimeout(() => {
           el.classList.remove(
             "ring-2",
-            "ring-amber-500",
+            "ring-primary",
             "ring-offset-2",
             "ring-offset-background",
           );
@@ -243,6 +252,17 @@ export function JobsBoard({
         return !touched;
       });
     }
+    if (dateFrom || dateTo) {
+      let lo = dateFrom;
+      let hi = dateTo;
+      if (lo && hi && lo > hi) [lo, hi] = [hi, lo];
+      out = out.filter((j) => {
+        const key = localDayKey(j.createdAt);
+        if (lo && key < lo) return false;
+        if (hi && key > hi) return false;
+        return true;
+      });
+    }
     if (sort === "company") {
       out = [...out].sort((a, b) => a.company.localeCompare(b.company));
     } else if (sort === "most-applied") {
@@ -264,6 +284,8 @@ export function JobsBoard({
     myStatus,
     onlyReferrals,
     onlyUntouched,
+    dateFrom,
+    dateTo,
     sort,
     currentUserId,
     searchIndex,
@@ -443,17 +465,110 @@ export function JobsBoard({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                dateActive && "border-primary/50 text-primary hover:text-primary",
+              )}
+            >
+              <CalendarDays className="h-3.5 w-3.5 mr-1" />
+              {dateActive ? (
+                <span className="font-mono text-[11px] tabular-nums">
+                  {rangeLabel(dateFrom, dateTo)}
+                </span>
+              ) : (
+                "Dates"
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 space-y-3">
+            <div className="font-mono text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+              Added between
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label
+                  htmlFor="jobs-date-from"
+                  className="text-xs text-muted-foreground"
+                >
+                  From
+                </label>
+                <Input
+                  id="jobs-date-from"
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label
+                  htmlFor="jobs-date-to"
+                  className="text-xs text-muted-foreground"
+                >
+                  To
+                </label>
+                <Input
+                  id="jobs-date-to"
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {(
+                [
+                  ["Today", 1],
+                  ["7 days", 7],
+                  ["30 days", 30],
+                ] as const
+              ).map(([label, days]) => (
+                <Button
+                  key={label}
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    setDateFrom(daysAgoInputValue(days - 1));
+                    setDateTo(todayInputValue());
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs ml-auto"
+                disabled={!dateActive}
+                onClick={() => {
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Leave one side empty for an open-ended range.
+            </p>
+          </PopoverContent>
+        </Popover>
         <AddJobDialog />
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-        <span>
+        <span className="font-mono tabular-nums text-[11px]">
           {filtered.length} of {jobs.length} jobs
         </span>
         <span className="hidden sm:inline">
-          Press <kbd className="rounded bg-muted px-1">/</kbd> to search •{" "}
-          <kbd className="rounded bg-muted px-1">N</kbd> to add •{" "}
-          <kbd className="rounded bg-muted px-1">D</kbd> dashboard
+          Press <Kbd>/</Kbd> to search · <Kbd>N</Kbd> to add · <Kbd>D</Kbd>{" "}
+          dashboard
         </span>
       </div>
 
@@ -465,7 +580,7 @@ export function JobsBoard({
           isStale && "opacity-60",
         )}
       >
-        <div className="hidden md:grid grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-4 px-4 py-2.5 border-b bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="hidden md:grid grid-cols-[minmax(0,1fr)_420px_160px_64px] gap-4 px-4 py-2.5 border-b bg-muted/30 font-mono text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
           <div>Company / Position</div>
           <div>My tracking</div>
           <div>Added</div>
@@ -474,7 +589,7 @@ export function JobsBoard({
         {/* Keyed by the discrete filters (never the search query) so changing
             them cross-fades the whole list instead of hard-jumping. */}
         <div
-          key={`${myStatus}|${onlyReferrals}|${onlyUntouched}|${sort}`}
+          key={`${myStatus}|${onlyReferrals}|${onlyUntouched}|${sort}|${dateFrom}|${dateTo}`}
           className="animate-in fade-in-0 duration-200"
         >
         {filtered.length === 0 ? (
@@ -482,28 +597,30 @@ export function JobsBoard({
         ) : (
           groups.map((group) => (
             <section key={group.key}>
+              {/* Day band: a visibly distinct divider between days, not a row.
+                  Solid muted layer under a primary tint so the sticky header
+                  also occludes rows scrolling beneath it. */}
               {group.label && (
-                <div className="sticky top-14 z-10 flex items-center gap-2 px-4 py-2 border-b text-sm bg-card/95 backdrop-blur bg-gradient-to-r from-violet-500/10 via-sky-500/10 to-transparent">
-                  <CalendarDays className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
+                <div className="sticky top-14 z-10 flex items-baseline gap-2 border-y border-t-transparent px-4 py-2 bg-muted backdrop-blur [background-image:linear-gradient(hsl(var(--primary)/0.07),hsl(var(--primary)/0.07))]">
                   <span
-                    className="font-semibold tabular-nums text-violet-700 dark:text-violet-200"
+                    className="font-mono text-xs font-bold tabular-nums text-primary"
                     suppressHydrationWarning
                   >
                     {group.label.date}
                   </span>
                   <span
-                    className="text-sky-700/80 dark:text-sky-300/80"
+                    className="text-xs font-medium text-muted-foreground"
                     suppressHydrationWarning
                   >
-                    · {group.label.weekday}
+                    {group.label.weekday}
                   </span>
-                  <span className="ml-auto flex items-center gap-2">
+                  <span className="ml-auto flex items-baseline gap-2">
                     {group.jobs.length < group.total && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
                         {group.jobs.length.toLocaleString()} shown
                       </span>
                     )}
-                    <span className="text-xs font-medium rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-200 px-2 py-0.5">
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums text-primary">
                       {group.total.toLocaleString()}{" "}
                       {group.total === 1 ? "job" : "jobs"}
                     </span>
@@ -627,8 +744,11 @@ export function JobsBoard({
                     <span className="hidden sm:inline">
                       {job.addedBy.displayName}
                     </span>
-                    <span suppressHydrationWarning>
-                      · {formatRelative(job.createdAt)}
+                    <span
+                      className="font-mono text-[11px] tabular-nums"
+                      suppressHydrationWarning
+                    >
+                      {formatRelative(job.createdAt)}
                     </span>
                   </div>
                   <div className="flex items-center justify-end gap-1">
@@ -1208,11 +1328,36 @@ function dateInputValue(value: Date | string | null | undefined): string {
 }
 
 function todayInputValue(): string {
+  return localDayKey(new Date());
+}
+
+function daysAgoInputValue(days: number): string {
   const d = new Date();
+  d.setDate(d.getDate() - days);
+  return localDayKey(d);
+}
+
+// Local-timezone YYYY-MM-DD key — same bucketing as the day-group headers.
+function localDayKey(value: Date | string): string {
+  const d = typeof value === "string" ? new Date(value) : value;
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+// Compact toolbar label for the active range, e.g. "06/25 – 07/02".
+function rangeLabel(from: string, to: string): string {
+  const fmt = (key: string) => {
+    const [, m, d] = key.split("-");
+    return `${m}/${d}`;
+  };
+  if (from && to) {
+    if (from > to) [from, to] = [to, from];
+    return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
+  }
+  if (from) return `from ${fmt(from)}`;
+  return `until ${fmt(to)}`;
 }
 
 function daysSince(value: Date | string | null | undefined): number | null {
@@ -1314,10 +1459,17 @@ function EmptyState() {
       </div>
       <p className="font-medium">No jobs match those filters</p>
       <p className="text-sm text-muted-foreground max-w-sm mt-1">
-        Try clearing filters or add a new job with{" "}
-        <kbd className="rounded bg-muted px-1">N</kbd>.
+        Try clearing filters or add a new job with <Kbd>N</Kbd>.
       </p>
     </div>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">
+      {children}
+    </kbd>
   );
 }
 

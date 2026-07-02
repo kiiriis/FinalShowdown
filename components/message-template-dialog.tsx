@@ -129,9 +129,7 @@ export function MessageTemplateDialog({
           }}
           className={cn(
             "relative transition-opacity p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted",
-            kind === "connection"
-              ? "hover:text-sky-600 dark:hover:text-sky-300"
-              : "hover:text-violet-600 dark:hover:text-violet-300",
+            "hover:text-primary",
             // Keep visible when the NEW dot is showing so users notice the feature;
             // once used (or on second page load), fall back to hover-reveal.
             showNewDot
@@ -144,8 +142,8 @@ export function MessageTemplateDialog({
           <Icon className="h-3.5 w-3.5" />
           {showNewDot && (
             <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-500 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-gradient-to-br from-violet-500 to-sky-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
             </span>
           )}
         </button>
@@ -176,7 +174,7 @@ export function MessageTemplateDialog({
             className="min-h-[220px] resize-y font-mono text-[13px] leading-relaxed"
           />
           <p className="text-[10px] text-muted-foreground">
-            Tweak freely — edits here don't affect your saved template.
+            Tweak freely — edits here don’t affect your saved template.
           </p>
         </div>
 

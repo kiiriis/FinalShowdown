@@ -2,50 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Three-theme token contract — Paper (light), Graphite (.graphite), Carbon (.dark).
+   Graphite and Carbon are both dark-family: `dark:` utilities match either
+   (see darkMode in tailwind.config.ts). Values are HSL triplets so Tailwind's
+   opacity modifiers (bg-primary/20) keep working. */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 8%;
+    --background: 230 25% 97%;
+    --foreground: 233 25% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 8%;
+    --card-foreground: 233 25% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 8%;
-    --primary: 262 83% 58%;
+    --popover-foreground: 233 25% 12%;
+    --primary: 233 64% 48%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 10%;
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
-    --accent: 240 5% 96%;
-    --accent-foreground: 240 10% 10%;
-    --destructive: 0 72% 51%;
+    --secondary: 231 18% 93%;
+    --secondary-foreground: 233 25% 14%;
+    --muted: 231 18% 93%;
+    --muted-foreground: 233 10% 38%;
+    --accent: 231 20% 92%;
+    --accent-foreground: 233 25% 14%;
+    --destructive: 350 72% 44%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 262 83% 58%;
-    --radius: 0.75rem;
+    --border: 231 14% 87%;
+    --input: 231 14% 84%;
+    --ring: 233 64% 48%;
+    --gold: 41 86% 33%;
+    --radius: 0.625rem;
+  }
+
+  .graphite {
+    --background: 228 6% 15%;
+    --foreground: 228 12% 96%;
+    --card: 228 6% 19%;
+    --card-foreground: 228 12% 96%;
+    --popover: 228 7% 17%;
+    --popover-foreground: 228 12% 96%;
+    --primary: 231 96% 76%;
+    --primary-foreground: 233 45% 12%;
+    --secondary: 228 6% 24%;
+    --secondary-foreground: 228 12% 96%;
+    --muted: 228 6% 23%;
+    --muted-foreground: 228 9% 72%;
+    --accent: 228 6% 26%;
+    --accent-foreground: 228 12% 96%;
+    --destructive: 350 80% 62%;
+    --destructive-foreground: 233 45% 10%;
+    --border: 228 6% 28%;
+    --input: 228 6% 31%;
+    --ring: 231 96% 76%;
+    --gold: 43 80% 62%;
   }
 
   .dark {
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
-    --card: 240 8% 7%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 8% 7%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 263 85% 68%;
-    --primary-foreground: 240 10% 4%;
-    --secondary: 240 4% 14%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 4% 14%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 4% 14%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5% 18%;
-    --input: 240 5% 18%;
-    --ring: 263 85% 68%;
+    --background: 233 12% 6%;
+    --foreground: 228 14% 96%;
+    --card: 233 10% 9%;
+    --card-foreground: 228 14% 96%;
+    --popover: 233 10% 8%;
+    --popover-foreground: 228 14% 96%;
+    --primary: 231 100% 77%;
+    --primary-foreground: 233 45% 12%;
+    --secondary: 233 8% 14%;
+    --secondary-foreground: 228 14% 96%;
+    --muted: 233 8% 13%;
+    --muted-foreground: 230 8% 66%;
+    --accent: 233 8% 16%;
+    --accent-foreground: 228 14% 96%;
+    --destructive: 350 84% 64%;
+    --destructive-foreground: 233 45% 10%;
+    --border: 233 8% 17%;
+    --input: 233 8% 20%;
+    --ring: 231 100% 77%;
+    --gold: 43 85% 63%;
   }
 
   * {
@@ -58,11 +87,14 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  body {
-    background-image:
-      radial-gradient(at 10% 0%, hsl(var(--primary) / 0.08) 0px, transparent 40%),
-      radial-gradient(at 90% 100%, hsl(200 90% 60% / 0.06) 0px, transparent 40%);
-    background-attachment: fixed;
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 }
 
@@ -81,8 +113,11 @@
   .text-balance {
     text-wrap: balance;
   }
-  .gradient-text {
-    @apply bg-gradient-to-r from-violet-500 via-fuchsia-500 to-sky-500 bg-clip-text text-transparent;
+  /* Data text: mono, tabular, tightened — dates, counts, positions, kbd. */
+  .font-data {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 }
 

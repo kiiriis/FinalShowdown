@@ -58,13 +58,13 @@ export function Nav({ user }: Props) {
     });
   }
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/70 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur-lg">
       <div className="container flex h-14 items-center gap-2">
-        <Link href="/" className="flex items-center gap-2 group mr-2">
-          <span className="rounded-lg bg-gradient-to-br from-violet-500 to-sky-500 p-1.5 text-white shadow-md transition-transform group-hover:scale-110">
+        <Link href="/" className="flex items-center gap-2.5 group mr-2">
+          <span className="rounded-md bg-primary p-1.5 text-primary-foreground transition-transform duration-200 group-hover:-rotate-6">
             <Trophy className="h-4 w-4" />
           </span>
-          <span className="font-display font-semibold tracking-tight">
+          <span className="font-display text-[15px] font-bold tracking-tight">
             Final Showdown
           </span>
         </Link>

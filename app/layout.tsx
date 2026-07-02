@@ -1,20 +1,30 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+import {
+  Instrument_Sans,
+  Bricolage_Grotesque,
+  JetBrains_Mono,
+} from "next/font/google";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { MotionProvider } from "@/components/motion-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const inter = Inter({
+const sans = Instrument_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
 });
 
-const display = Space_Grotesk({
+const display = Bricolage_Grotesque({
   subsets: ["latin"],
   variable: "--font-display",
+  display: "swap",
+});
+
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -32,13 +42,14 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${display.variable}`}
+      className={`${sans.variable} ${display.variable} ${mono.variable}`}
     >
       <body className="min-h-screen font-sans">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
+          themes={["light", "graphite", "dark"]}
           disableTransitionOnChange={false}
         >
           <MotionProvider>

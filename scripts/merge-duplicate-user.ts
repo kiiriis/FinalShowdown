@@ -7,9 +7,9 @@
  *
  * Usage:
  *   tsx scripts/merge-duplicate-user.ts \
- *     --from stavan@final-showdown.local \
- *     --to stavanshah20@gmail.com \
- *     --displayName Stavan
+ *     --from alice@final-showdown.local \
+ *     --to alice.real@gmail.com \
+ *     --displayName Alice
  *
  * Add --dry to preview without writing.
  */

@@ -1,0 +1,15 @@
+{
+  "csvPath": "applications.csv",
+  "users": [
+    {
+      "displayName": "Alice",
+      "statusColumn": "Alice Status",
+      "referralColumn": "Alice Referral"
+    },
+    {
+      "displayName": "Bob",
+      "statusColumn": "Bob Status",
+      "referralColumn": "Bob's Referral Status"
+    }
+  ]
+}

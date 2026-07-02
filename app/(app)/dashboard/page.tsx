@@ -65,11 +65,11 @@ export default async function DashboardPage() {
   return (
     <main className="container py-6 space-y-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight">
-            Dashboard
+          <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-tight">
+            Race control
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Live stats for the squad. Numbers don't lie.
+            Live stats for the squad. Numbers don’t lie.
           </p>
         </div>
 
@@ -84,26 +84,26 @@ export default async function DashboardPage() {
           <KpiCard
             label="My applied"
             value={me?.totals.applied ?? 0}
-            accent="sky"
+            accent="applied"
             href="/?status=APPLIED"
             delta={{ value: myAppliedThisWeek, label: "this week" }}
           />
           <KpiCard
             label="My skipped"
             value={me?.totals.skipped ?? 0}
-            accent="zinc"
+            accent="skipped"
             href="/?status=SKIPPED"
           />
           <KpiCard
             label="My rejected"
             value={me?.totals.rejected ?? 0}
-            accent="rose"
+            accent="rejected"
             href="/?status=REJECTED"
           />
           <KpiCard
             label="My offers"
             value={me?.totals.offers ?? 0}
-            accent="emerald"
+            accent="offer"
             href="/?status=OFFER"
           />
         </KpiRow>
@@ -112,7 +112,7 @@ export default async function DashboardPage() {
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle>My status breakdown</CardTitle>
-              <CardDescription>How you're spending swings.</CardDescription>
+              <CardDescription>How you’re spending swings.</CardDescription>
             </CardHeader>
             <CardContent>
               <StatusDonut
@@ -136,7 +136,7 @@ export default async function DashboardPage() {
             <CardHeader>
               <CardTitle>The showdown</CardTitle>
               <CardDescription>
-                Stacked per-user totals. Who's putting in the work?
+                Stacked per-user totals. Who’s putting in the work?
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -196,64 +196,80 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-amber-500" /> Leaderboard
+                <Trophy className="h-4 w-4 text-gold" /> Standings
               </CardTitle>
               <CardDescription>Total applications, all time.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-1">
-              {leaderboard.map((p, i) => (
-                <div
-                  key={p.user.id}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/40 transition-colors animate-in fade-in-0 slide-in-from-bottom-1 duration-300 fill-mode-backwards"
-                  style={{ animationDelay: `${280 + i * 40}ms` }}
-                >
-                  <span
-                    aria-label={`Rank ${i + 1}`}
-                    className={
-                      "w-6 text-center text-sm font-semibold " +
-                      (i === 0
-                        ? "text-amber-500"
-                        : i === 1
-                          ? "text-zinc-400"
-                          : i === 2
-                            ? "text-orange-400"
-                            : "text-muted-foreground")
-                    }
+            <CardContent className="space-y-4">
+              {leaderboard.map((p, i) => {
+                const max = leaderboard[0]?.totals.applied || 1;
+                const pace = Math.max(
+                  0.02,
+                  p.totals.applied / max,
+                );
+                const leader = i === 0 && p.totals.applied > 0;
+                return (
+                  <div
+                    key={p.user.id}
+                    className="animate-in fade-in-0 slide-in-from-bottom-1 duration-300 fill-mode-backwards"
+                    style={{ animationDelay: `${120 + i * 50}ms` }}
                   >
-                    {i + 1}
-                  </span>
-                  <Avatar className="h-7 w-7">
-                    {p.user.image && (
-                      <AvatarImage
-                        src={p.user.image}
-                        alt={p.user.displayName}
+                    <div className="flex items-center gap-3">
+                      <span
+                        aria-label={`Position ${i + 1}`}
+                        className={
+                          "w-7 font-mono text-sm font-bold tabular-nums " +
+                          (leader ? "text-gold" : "text-muted-foreground")
+                        }
+                      >
+                        P{i + 1}
+                      </span>
+                      <Avatar className="h-7 w-7">
+                        {p.user.image && (
+                          <AvatarImage
+                            src={p.user.image}
+                            alt={p.user.displayName}
+                          />
+                        )}
+                        <AvatarFallback className="text-[10px]">
+                          {initials(p.user.displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {p.user.displayName}
+                        </div>
+                        <div className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                          {p.totals.applied} applied · {p.totals.skipped}{" "}
+                          skipped · {p.totals.rejected} rejected
+                        </div>
+                      </div>
+                      <div className="font-display text-xl font-bold tabular-nums">
+                        {p.totals.applied}
+                      </div>
+                    </div>
+                    <div className="mt-1.5 ml-10 h-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={
+                          "h-full origin-left rounded-full animate-grow-x " +
+                          (leader ? "bg-gold" : "bg-primary/70")
+                        }
+                        style={{
+                          width: `${pace * 100}%`,
+                          animationDelay: `${200 + i * 50}ms`,
+                        }}
                       />
-                    )}
-                    <AvatarFallback className="text-[10px]">
-                      {initials(p.user.displayName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {p.user.displayName}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {p.totals.applied} applied • {p.totals.skipped} skipped •{" "}
-                      {p.totals.rejected} rejected
                     </div>
                   </div>
-                  <div className="text-lg font-semibold tabular-nums">
-                    {p.totals.applied}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <HandHelping className="h-4 w-4 text-amber-500" />
+                <HandHelping className="h-4 w-4 text-primary" />
                 Referrals needed
               </CardTitle>
               <CardDescription>

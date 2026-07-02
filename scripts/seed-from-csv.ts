@@ -1,7 +1,11 @@
 /**
- * Seed jobs + per-user statuses from "Final Showdown - Applications.csv".
+ * Seed jobs + per-user statuses from a spreadsheet CSV export.
  *
- * Idempotent: re-running only fills gaps.
+ * Reads `seed.config.json` (see `seed.config.example.json`) to learn where
+ * the CSV lives and which columns hold each person's status/referral cells.
+ *
+ * Idempotent: re-running only fills gaps — but note it re-asserts whatever
+ * the CSV says for existing entries (see docs/SEEDING.md).
  *
  * Usage:
  *   npm run seed
@@ -17,48 +21,35 @@ import {
 
 const prisma = new PrismaClient();
 
-const CSV_PATH = path.resolve(
-  process.cwd(),
-  "Final Showdown - Applications.csv",
-);
-
-type Row = {
-  Company: string;
-  Position: string;
-  Link: string;
-  "Krish Status": string;
-  "Murtaza Status": string;
-  "Stavan's Status": string;
-  "Parth's Status": string;
-  "Krish Referral": string;
-  "Murtaza Referral": string;
-  "Stavan's Referral Status": string;
-  "Parth's Referral": string;
+type SeedUser = {
+  displayName: string;
+  statusColumn: string;
+  referralColumn: string;
+};
+type SeedConfig = {
+  csvPath: string;
+  users: SeedUser[];
 };
 
-/** CSV column display name → status column key → referral column key. */
-const USERS = [
-  {
-    displayName: "Krish",
-    statusCol: "Krish Status" as const,
-    refCol: "Krish Referral" as const,
-  },
-  {
-    displayName: "Murtaza",
-    statusCol: "Murtaza Status" as const,
-    refCol: "Murtaza Referral" as const,
-  },
-  {
-    displayName: "Stavan",
-    statusCol: "Stavan's Status" as const,
-    refCol: "Stavan's Referral Status" as const,
-  },
-  {
-    displayName: "Parth",
-    statusCol: "Parth's Status" as const,
-    refCol: "Parth's Referral" as const,
-  },
-];
+const CONFIG_PATH = path.resolve(process.cwd(), "seed.config.json");
+
+function loadConfig(): SeedConfig {
+  if (!fs.existsSync(CONFIG_PATH)) {
+    console.error(
+      "seed.config.json not found. Copy seed.config.example.json, point it " +
+        "at your CSV export, and map each person's status/referral columns.",
+    );
+    process.exit(1);
+  }
+  const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) as SeedConfig;
+  if (!cfg.csvPath || !Array.isArray(cfg.users) || cfg.users.length === 0) {
+    console.error(
+      "seed.config.json must define `csvPath` and a non-empty `users` array.",
+    );
+    process.exit(1);
+  }
+  return cfg;
+}
 
 function parseDisplayNames(): Map<string, string> {
   const raw = process.env.USER_DISPLAY_NAMES ?? "";
@@ -71,8 +62,10 @@ function parseDisplayNames(): Map<string, string> {
 }
 
 async function main() {
-  if (!fs.existsSync(CSV_PATH)) {
-    console.error(`CSV not found at ${CSV_PATH}`);
+  const config = loadConfig();
+  const csvPath = path.resolve(process.cwd(), config.csvPath);
+  if (!fs.existsSync(csvPath)) {
+    console.error(`CSV not found at ${csvPath}`);
     process.exit(1);
   }
 
@@ -88,7 +81,7 @@ async function main() {
 
   // Ensure users exist (real email if known, placeholder otherwise)
   const users = [];
-  for (const u of USERS) {
+  for (const u of config.users) {
     const email =
       nameToEmail.get(u.displayName.toLowerCase()) ??
       `${u.displayName.toLowerCase()}@final-showdown.local`;
@@ -114,8 +107,8 @@ async function main() {
     },
   });
 
-  const raw = fs.readFileSync(CSV_PATH, "utf8");
-  const rows: Row[] = parse(raw, {
+  const raw = fs.readFileSync(csvPath, "utf8");
+  const rows: Array<Record<string, string>> = parse(raw, {
     columns: true,
     skip_empty_lines: true,
     relax_column_count: true,
@@ -123,6 +116,20 @@ async function main() {
   });
 
   console.log(`Parsed ${rows.length} rows from CSV.`);
+
+  // Fail fast on typo'd column names instead of silently importing nothing.
+  const headers = new Set(Object.keys(rows[0] ?? {}));
+  for (const u of users) {
+    for (const col of [u.statusColumn, u.referralColumn]) {
+      if (!headers.has(col)) {
+        console.error(
+          `Column "${col}" (for ${u.displayName}) not found in CSV headers: ` +
+            [...headers].join(", "),
+        );
+        process.exit(1);
+      }
+    }
+  }
 
   let createdJobs = 0;
   let skippedJobs = 0;
@@ -151,8 +158,8 @@ async function main() {
     if (!existing) createdJobs++;
 
     for (const u of users) {
-      const status = parseCsvAppStatus(r[u.statusCol]);
-      const referral = parseCsvReferral(r[u.refCol]);
+      const status = parseCsvAppStatus(r[u.statusColumn]);
+      const referral = parseCsvReferral(r[u.referralColumn]);
       if (status === "NONE" && referral === "NONE") continue;
       const res = await prisma.jobEntry.upsert({
         where: { jobId_userId: { jobId: job.id, userId: u.id } },

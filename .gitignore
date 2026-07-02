@@ -29,3 +29,13 @@ coverage/
 
 # Local DB backups (contain personal data)
 backups/
+
+# Personal application data (seed spreadsheets) — never publish
+*.csv
+*.xlsx
+
+# Claude Code local config
+.claude/
+
+# Local seed config (maps your CSV's column names — may contain real names)
+seed.config.json
