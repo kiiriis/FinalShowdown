@@ -26,3 +26,6 @@ prisma/*.db-journal
 .turbo/
 coverage/
 
+
+# Local DB backups (contain personal data)
+backups/
