@@ -70,16 +70,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
     async jwt({ token, user }) {
-      // Resolve uid from the DB by email on every call (not just sign-in) so a
-      // stale uid — e.g. a session minted before the Supabase migration, whose
-      // token still holds the old database's user id — self-heals to the
-      // current row instead of failing FK checks on writes.
+      // Resolve uid from the DB by email so a stale uid — e.g. a session minted
+      // before the Supabase migration, whose token still holds the old
+      // database's user id — self-heals to the current row instead of failing
+      // FK checks on writes. This only needs to happen ONCE per token: after we
+      // resolve it we set `healed` and take the fast (DB-free) path on every
+      // subsequent request, which removes a DB round-trip from every page load.
+      if (token.uid && token.healed) return token;
       const email = (user?.email ?? token.email)?.toLowerCase();
       if (email) {
-        const dbUser = await prisma.user.findUnique({ where: { email } });
+        const dbUser = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, displayName: true },
+        });
         if (dbUser) {
           token.uid = dbUser.id;
           token.displayName = dbUser.displayName;
+          token.healed = true;
         }
       }
       return token;

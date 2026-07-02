@@ -49,7 +49,35 @@ export type EntryStatusCount = Record<AppStatus, number>;
 export type ReferralCount = Record<ReferralStatus, number>;
 
 export async function getDashboardData() {
-  const [users, jobs] = await Promise.all([getAllUsers(), getAllJobs()]);
+  // One trimmed query drives the whole dashboard. We fetch jobs with only the
+  // fields the charts actually read, dropping the six outreach/notes entry
+  // fields (referralSentAt, referralFollowUpSent, coldEmailSent,
+  // coldEmailSentAt, coldEmailFollowUpSent, note) that make up the bulk of the
+  // payload but are never rendered here. Aggregation stays in JS — a handful of
+  // loops over a few thousand rows is cheap; the win is not shipping ~2MB of
+  // unused entry data over the wire on every dashboard load.
+  const [users, jobs] = await Promise.all([
+    getAllUsers(),
+    prisma.job.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        createdAt: true,
+        addedById: true,
+        company: true,
+        link: true,
+        entries: {
+          where: { user: { isActive: true } },
+          select: {
+            id: true,
+            userId: true,
+            status: true,
+            referral: true,
+            updatedAt: true,
+          },
+        },
+      },
+    }),
+  ]);
   const activeUserIds = new Set(users.map((u) => u.id));
 
   const totalJobs = jobs.length;
@@ -80,10 +108,7 @@ export async function getDashboardData() {
       refCounts[e.referral]++;
     }
     // Pending = jobs with no explicit status for this user (either no entry OR NONE)
-    const entriesByJob = new Map(entries.map((e) => [e.id, e]));
-    void entriesByJob;
-    const pending =
-      jobs.length - (entries.length - statusCounts.NONE);
+    const pending = jobs.length - (entries.length - statusCounts.NONE);
     // applications = anything not NONE/SKIPPED
     const applied =
       statusCounts.APPLIED +

@@ -13,5 +13,8 @@ declare module "next-auth/jwt" {
   interface JWT {
     uid?: string;
     displayName?: string;
+    // Set once we've resolved uid from the DB, so later requests skip the
+    // per-request DB lookup (the uid self-heal only needs to run one time).
+    healed?: boolean;
   }
 }
