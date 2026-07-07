@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { MessageSquareText, Eye, Pencil } from "lucide-react";
+import { Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -28,7 +27,10 @@ type NoteEntry = {
   note?: string | null;
 };
 
+// Controlled dialog — one instance on the board (was one per row).
 export function NoteDialog({
+  open,
+  onOpenChange,
   jobId,
   jobTitle,
   users,
@@ -36,6 +38,8 @@ export function NoteDialog({
   currentUserId,
   onSaved,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   jobId: string;
   jobTitle: string;
   users: NoteUser[];
@@ -49,24 +53,24 @@ export function NoteDialog({
 }) {
   const myEntry = entries.find((e) => e.userId === currentUserId);
   const me = users.find((u) => u.id === currentUserId);
-  const [open, setOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState(myEntry?.note ?? "");
+  const [draft, setDraft] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [preview, setPreview] = React.useState(false);
 
-  // Re-sync draft when someone else's edit (via SSE) changes our note.
+  // Load the active job's note on every open (the instance is reused across
+  // jobs). Read through a ref so mid-edit SSE updates can't clobber typing.
+  const noteRef = React.useRef("");
+  noteRef.current = myEntry?.note ?? "";
   React.useEffect(() => {
-    if (!open) {
-      setDraft(myEntry?.note ?? "");
+    if (open) {
+      setDraft(noteRef.current);
       setPreview(false);
     }
-  }, [myEntry?.note, open]);
+  }, [open, jobId]);
 
   const othersWithNotes = entries.filter(
     (e) => e.userId !== currentUserId && e.note && e.note.trim().length > 0,
   );
-  const totalNotes =
-    othersWithNotes.length + (myEntry?.note?.trim() ? 1 : 0);
 
   async function save() {
     setSaving(true);
@@ -91,7 +95,7 @@ export function NoteDialog({
         note: data.note,
       });
       toast.success(data.note ? "Note saved" : "Note cleared");
-      setOpen(false);
+      onOpenChange(false);
     } catch {
       toast.error("Couldn't save note");
     } finally {
@@ -100,30 +104,7 @@ export function NoteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            "relative shrink-0 transition-colors",
-            totalNotes > 0
-              ? "text-amber-500 dark:text-amber-300"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-label={
-            totalNotes > 0 ? `${totalNotes} note(s)` : "Add a note"
-          }
-          title={totalNotes > 0 ? `${totalNotes} note(s)` : "Add a note"}
-        >
-          <MessageSquareText className="h-3.5 w-3.5" />
-          {totalNotes > 0 && (
-            <span className="absolute -top-1.5 -right-2 text-[9px] font-semibold leading-none rounded-full bg-amber-500 text-white px-1 py-0.5 min-w-[14px] text-center">
-              {totalNotes}
-            </span>
-          )}
-        </button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="min-w-0">
           <DialogTitle>Notes</DialogTitle>
@@ -205,10 +186,7 @@ export function NoteDialog({
                 <div className="flex items-center gap-2 mb-1.5">
                   <Avatar className="h-5 w-5">
                     {me?.image && (
-                      <AvatarImage
-                        src={me.image}
-                        alt={me.displayName}
-                      />
+                      <AvatarImage src={me.image} alt={me.displayName} />
                     )}
                     <AvatarFallback className="text-[9px]">
                       {initials(me?.displayName ?? "?")}
@@ -246,7 +224,7 @@ export function NoteDialog({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setOpen(false)}
+            onClick={() => onOpenChange(false)}
             disabled={saving}
           >
             Cancel

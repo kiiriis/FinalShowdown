@@ -17,6 +17,10 @@ import {
   CalendarDays,
   Mail,
   MailCheck,
+  MessageSquareText,
+  UserPlus,
+  Handshake,
+  Pencil,
 } from "lucide-react";
 import { AppStatus, ReferralStatus } from "@prisma/client";
 import { toast } from "sonner";
@@ -37,7 +41,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "./ui/dialog";
 import {
   DropdownMenu,
@@ -58,6 +61,7 @@ import {
   REFERRAL_STATUS_STYLE,
 } from "@/lib/status-maps";
 import { buildSearchText, normalizeQuery } from "@/lib/search";
+import type { TemplateKind } from "@/lib/templates";
 
 type Entry = {
   id: string;
@@ -99,6 +103,21 @@ type CurrentUserTemplates = {
   followUpDelayDays: number;
 };
 
+// Which overlay is open, and for which job. The board renders exactly ONE
+// instance of each dialog and routes every row's buttons through this state —
+// mounting dialogs per row (6-7 Radix roots × 200 rows) is what made opening
+// any popup visibly laggy.
+type ActiveDialog =
+  | { kind: "referral" | "cold" | "note" | "info" | "edit"; jobId: string }
+  | { kind: "template"; jobId: string; template: TemplateKind };
+
+const FIRST_USE_KEY = "fs:whatsnew:templates:first-click";
+
+// Render window: keep the DOM small (Radix modals apply aria-hidden/scroll
+// lock across the whole page on open — cost scales with DOM size). More rows
+// stream in automatically as you scroll.
+const PAGE_SIZE = 60;
+
 export function JobsBoard({
   jobs: initialJobs,
   users,
@@ -139,10 +158,44 @@ export function JobsBoard({
   // near a day boundary would land in different buckets and React would throw
   // a hydration mismatch.
   const [mounted, setMounted] = React.useState(false);
-  const PAGE_SIZE = 200;
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
   const searchRef = React.useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // Single-dialog state. The payload survives close so exit animations have
+  // data to render; `dialogOpen` is what actually opens/closes.
+  const [activeDialog, setActiveDialog] = React.useState<ActiveDialog | null>(
+    null,
+  );
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+
+  // "NEW" dot on the template buttons until first use — one piece of board
+  // state instead of a localStorage read + window listener in every row.
+  const [showTemplateDot, setShowTemplateDot] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      setShowTemplateDot(localStorage.getItem(FIRST_USE_KEY) !== "1");
+    } catch {
+      // localStorage blocked — skip the dot rather than show it forever.
+    }
+  }, []);
+
+  const handleOpenDialog = React.useCallback((d: ActiveDialog) => {
+    if (d.kind === "template") {
+      setShowTemplateDot(false);
+      try {
+        localStorage.setItem(FIRST_USE_KEY, "1");
+      } catch {
+        // Harmless if blocked.
+      }
+    }
+    setActiveDialog(d);
+    setDialogOpen(true);
+  }, []);
+
+  const closeDialog = React.useCallback((open: boolean) => {
+    if (!open) setDialogOpen(false);
+  }, []);
 
   React.useEffect(() => setJobs(initialJobs), [initialJobs]);
   React.useEffect(() => setMounted(true), []);
@@ -155,6 +208,11 @@ export function JobsBoard({
   const searchIndex = React.useMemo(
     () => new Map(jobs.map((j) => [j.id, buildSearchText(j)])),
     [jobs],
+  );
+
+  const currentUserName = React.useMemo(
+    () => users.find((u) => u.id === currentUserId)?.displayName ?? "You",
+    [users, currentUserId],
   );
 
   // Keyboard: "/" focuses search, "d" → dashboard
@@ -312,7 +370,7 @@ export function JobsBoard({
     }
     // Bucket the full filtered set first so the per-day count in the header
     // reflects every match, independent of how many rows are currently
-    // rendered under the Load More cap.
+    // rendered under the windowing cap.
     type Bucket = {
       key: string;
       label: { date: string; weekday: string };
@@ -363,26 +421,107 @@ export function JobsBoard({
   }, [filtered, sort, mounted, visibleCount]);
 
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this job? This also clears everyone's status.")) return;
-    const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      // Let the row fade/slide out via its transition before removing it.
-      setDeletingId(id);
-      toast.success("Job deleted");
-      setTimeout(() => {
-        setJobs((s) => s.filter((j) => j.id !== id));
-        setDeletingId(null);
+  const handleDelete = React.useCallback(
+    async (id: string) => {
+      if (!confirm("Delete this job? This also clears everyone's status."))
+        return;
+      const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        // Let the row fade/slide out via its transition before removing it.
+        setDeletingId(id);
+        toast.success("Job deleted");
+        setTimeout(() => {
+          setJobs((s) => s.filter((j) => j.id !== id));
+          setDeletingId(null);
+          router.refresh();
+        }, 200);
+      } else {
+        toast.error("Couldn't delete");
+      }
+    },
+    [router],
+  );
+
+  // Stable per-board callbacks so memoized rows don't re-render when siblings
+  // change. Rows pass their own jobId back in.
+  const handleEntryUpdated = React.useCallback(
+    (jobId: string, entry: EntryUpdate) => {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === jobId ? { ...j, entries: upsertEntry(j.entries, entry) } : j,
+        ),
+      );
+      // EXPIRED cascades to other users server-side, so refetch after the
+      // actor toggles it to pull the cascade locally.
+      if (entry.status === "EXPIRED") {
         router.refresh();
-      }, 200);
-    } else {
-      toast.error("Couldn't delete");
-    }
-  }
+      }
+    },
+    [router],
+  );
+
+  const handleNoteSaved = React.useCallback(
+    (jobId: string, upd: { entryId: string; userId: string; note: string | null }) => {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === jobId
+            ? {
+                ...j,
+                entries: upsertNote(j.entries, upd.userId, upd.entryId, upd.note),
+              }
+            : j,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleJobSaved = React.useCallback(
+    (updated: {
+      id: string;
+      company: string;
+      position: string;
+      link: string;
+      notes: string | null;
+    }) => {
+      setJobs((prev) =>
+        prev.map((j) => (j.id === updated.id ? { ...j, ...updated } : j)),
+      );
+    },
+    [],
+  );
+
+  // Auto-load more rows as the sentinel scrolls into range.
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
+  const hasMore = filtered.length > visibleCount;
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!hasMore || !el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((v) => Math.min(v + PAGE_SIZE, filtered.length));
+        }
+      },
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // visibleCount is a dep on purpose: re-observing after each load fires
+    // again immediately if the sentinel is still within range.
+  }, [hasMore, filtered.length, visibleCount]);
 
   // useDeferredValue lags behind while the filtered list recomputes — dim the
   // table during that window so typing feels responsive instead of frozen.
   const isStale = query !== deferredQuery;
+
+  // The active dialog reads fresh job data from state (never a stale snapshot).
+  const activeJob = activeDialog
+    ? jobs.find((j) => j.id === activeDialog.jobId) ?? null
+    : null;
+  const activeEntry = activeJob?.entries.find(
+    (e) => e.userId === currentUserId,
+  );
 
   return (
     <div className="space-y-4">
@@ -586,12 +725,6 @@ export function JobsBoard({
           <div>Added</div>
           <div />
         </div>
-        {/* Keyed by the discrete filters (never the search query) so changing
-            them cross-fades the whole list instead of hard-jumping. */}
-        <div
-          key={`${myStatus}|${onlyReferrals}|${onlyUntouched}|${sort}|${dateFrom}|${dateTo}`}
-          className="animate-in fade-in-0 duration-200"
-        >
         {filtered.length === 0 ? (
           <EmptyState />
         ) : (
@@ -601,7 +734,7 @@ export function JobsBoard({
                   Solid muted layer under a primary tint so the sticky header
                   also occludes rows scrolling beneath it. */}
               {group.label && (
-                <div className="sticky top-14 z-10 flex items-baseline gap-2 border-y border-t-transparent px-4 py-2 bg-muted backdrop-blur [background-image:linear-gradient(hsl(var(--primary)/0.07),hsl(var(--primary)/0.07))]">
+                <div className="sticky top-14 z-10 flex items-baseline gap-2 border-y border-t-transparent px-4 py-2 bg-muted [background-image:linear-gradient(hsl(var(--primary)/0.07),hsl(var(--primary)/0.07))]">
                   <span
                     className="font-mono text-xs font-bold tabular-nums text-primary"
                     suppressHydrationWarning
@@ -629,223 +762,361 @@ export function JobsBoard({
               )}
               <ul className="divide-y">
                 {group.jobs.map((job) => (
-                  <li
+                  <JobRow
                     key={job.id}
-                    id={`job-${job.id}`}
-                    className={cn(
-                      "group grid md:grid-cols-[minmax(0,1fr)_420px_160px_120px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-all rounded-md",
-                      deletingId === job.id &&
-                        "opacity-0 -translate-x-1 pointer-events-none",
-                    )}
-                  >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">
-                        {job.company}
-                      </span>
-                      <Link
-                        href={job.link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-muted-foreground hover:text-foreground shrink-0"
-                        aria-label="Open job link"
-                        title="Open job link"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
-                      <CopyLinkButton link={job.link} />
-                      <NoteDialog
-                        jobId={job.id}
-                        jobTitle={`${job.company} — ${job.position || ""}`.trim()}
-                        users={users}
-                        entries={job.entries}
-                        currentUserId={currentUserId}
-                        onSaved={(upd) =>
-                          setJobs((prev) =>
-                            prev.map((j) =>
-                              j.id === job.id
-                                ? {
-                                    ...j,
-                                    entries: upsertNote(
-                                      j.entries,
-                                      upd.userId,
-                                      upd.entryId,
-                                      upd.note,
-                                    ),
-                                  }
-                                : j,
-                            ),
-                          )
-                        }
-                      />
-                      {job.notes && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span
-                              className="text-amber-500 dark:text-amber-300 shrink-0 cursor-help"
-                              aria-label="Has notes"
-                            >
-                              <StickyNote className="h-3.5 w-3.5" />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent
-                            side="right"
-                            className="max-w-xs whitespace-pre-wrap"
-                          >
-                            {job.notes}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground truncate">
-                      {job.position || "—"}
-                    </div>
-                  </div>
-                  <MyTrackingControls
                     job={job}
+                    users={users}
                     currentUserId={currentUserId}
-                    currentUserName={
-                      users.find((u) => u.id === currentUserId)?.displayName ??
-                      "You"
-                    }
+                    currentUserName={currentUserName}
+                    isAdmin={isAdmin}
+                    canUseTemplates={Boolean(currentUserTemplates)}
+                    showTemplateDot={showTemplateDot}
                     followUpDelayDays={
                       currentUserTemplates?.followUpDelayDays ?? 2
                     }
-                    onEntryUpdated={(entry) => {
-                      setJobs((prev) =>
-                        prev.map((j) =>
-                          j.id === job.id
-                            ? {
-                                ...j,
-                                entries: upsertEntry(j.entries, entry),
-                              }
-                            : j,
-                        ),
-                      );
-                      // EXPIRED cascades to other users server-side, so refetch
-                      // after the actor toggles it to pull the cascade locally.
-                      if (entry.status === "EXPIRED") {
-                        router.refresh();
-                      }
-                    }}
+                    deleting={deletingId === job.id}
+                    onOpenDialog={handleOpenDialog}
+                    onEntryUpdated={handleEntryUpdated}
+                    onDelete={handleDelete}
                   />
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Avatar className="h-5 w-5">
-                      {job.addedBy.image && (
-                        <AvatarImage
-                          src={job.addedBy.image}
-                          alt={job.addedBy.displayName}
-                        />
-                      )}
-                      <AvatarFallback className="text-[9px]">
-                        {initials(job.addedBy.displayName)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="hidden sm:inline">
-                      {job.addedBy.displayName}
-                    </span>
-                    <span
-                      className="font-mono text-[11px] tabular-nums"
-                      suppressHydrationWarning
-                    >
-                      {formatRelative(job.createdAt)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-end gap-1">
-                    <JobInfoDialog job={job} users={users} />
-                    {currentUserTemplates && (
-                      <>
-                        <MessageTemplateDialog
-                          kind="connection"
-                          job={{
-                            company: job.company,
-                            position: job.position,
-                            link: job.link,
-                          }}
-                          user={currentUserTemplates}
-                        />
-                        <MessageTemplateDialog
-                          kind="referral"
-                          job={{
-                            company: job.company,
-                            position: job.position,
-                            link: job.link,
-                          }}
-                          user={currentUserTemplates}
-                        />
-                      </>
-                    )}
-                    {(job.addedBy.id === currentUserId || isAdmin) && (
-                      <>
-                        <EditJobDialog
-                          job={job}
-                          onSaved={(updated) =>
-                            setJobs((prev) =>
-                              prev.map((j) =>
-                                j.id === updated.id ? { ...j, ...updated } : j,
-                              ),
-                            )
-                          }
-                        />
-                        <button
-                          onClick={() => handleDelete(job.id)}
-                          className="can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity p-2 md:p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                          aria-label="Delete job"
-                          title="Delete job"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  </li>
                 ))}
               </ul>
             </section>
           ))
         )}
-        </div>
       </div>
-      {filtered.length > visibleCount && (
-        <div className="flex flex-col items-center gap-2 py-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setVisibleCount((v) =>
-                Math.min(v + PAGE_SIZE, filtered.length),
-              )
-            }
-          >
-            Load {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Showing {visibleCount.toLocaleString()} of{" "}
-            {filtered.length.toLocaleString()} results
-          </p>
+      {hasMore && (
+        <div
+          ref={sentinelRef}
+          className="flex items-center justify-center py-3"
+        >
+          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+            Showing {Math.min(visibleCount, filtered.length).toLocaleString()}{" "}
+            of {filtered.length.toLocaleString()} — scroll for more
+          </span>
         </div>
+      )}
+
+      {/* Hoisted single-instance dialogs — opened via handleOpenDialog. */}
+      {activeJob && (
+        <>
+          <ReferralTrackingDialog
+            open={dialogOpen && activeDialog?.kind === "referral"}
+            onOpenChange={closeDialog}
+            jobId={activeJob.id}
+            userId={currentUserId}
+            entry={activeEntry}
+            onUpdated={handleEntryUpdated}
+          />
+          <ColdEmailDialog
+            open={dialogOpen && activeDialog?.kind === "cold"}
+            onOpenChange={closeDialog}
+            jobId={activeJob.id}
+            userId={currentUserId}
+            entry={activeEntry}
+            onUpdated={handleEntryUpdated}
+          />
+          <NoteDialog
+            open={dialogOpen && activeDialog?.kind === "note"}
+            onOpenChange={closeDialog}
+            jobId={activeJob.id}
+            jobTitle={`${activeJob.company} — ${activeJob.position || ""}`.trim()}
+            users={users}
+            entries={activeJob.entries}
+            currentUserId={currentUserId}
+            onSaved={(upd) => handleNoteSaved(activeJob.id, upd)}
+          />
+          <JobInfoDialog
+            open={dialogOpen && activeDialog?.kind === "info"}
+            onOpenChange={closeDialog}
+            job={activeJob}
+            users={users}
+          />
+          {(activeJob.addedBy.id === currentUserId || isAdmin) && (
+            <EditJobDialog
+              open={dialogOpen && activeDialog?.kind === "edit"}
+              onOpenChange={closeDialog}
+              job={activeJob}
+              onSaved={handleJobSaved}
+            />
+          )}
+          {currentUserTemplates && (
+            <MessageTemplateDialog
+              open={dialogOpen && activeDialog?.kind === "template"}
+              onOpenChange={closeDialog}
+              kind={
+                activeDialog?.kind === "template"
+                  ? activeDialog.template
+                  : "connection"
+              }
+              job={{
+                company: activeJob.company,
+                position: activeJob.position,
+                link: activeJob.link,
+              }}
+              user={currentUserTemplates}
+            />
+          )}
+        </>
       )}
     </div>
   );
 }
 
 type EntryUpdate = Partial<Entry> & { id: string; userId: string };
+type OpenDialogFn = (d: ActiveDialog) => void;
+
+// Memoized row: with stable board callbacks, editing one job re-renders one
+// row instead of the whole list.
+const JobRow = React.memo(function JobRow({
+  job,
+  users,
+  currentUserId,
+  currentUserName,
+  isAdmin,
+  canUseTemplates,
+  showTemplateDot,
+  followUpDelayDays,
+  deleting,
+  onOpenDialog,
+  onEntryUpdated,
+  onDelete,
+}: {
+  job: Job;
+  users: User[];
+  currentUserId: string;
+  currentUserName: string;
+  isAdmin: boolean;
+  canUseTemplates: boolean;
+  showTemplateDot: boolean;
+  followUpDelayDays: number;
+  deleting: boolean;
+  onOpenDialog: OpenDialogFn;
+  onEntryUpdated: (jobId: string, entry: EntryUpdate) => void;
+  onDelete: (jobId: string) => void;
+}) {
+  const myNote = job.entries.find((e) => e.userId === currentUserId)?.note;
+  const totalNotes =
+    job.entries.filter(
+      (e) =>
+        e.userId !== currentUserId && e.note && e.note.trim().length > 0,
+    ).length + (myNote?.trim() ? 1 : 0);
+
+  return (
+    <li
+      id={`job-${job.id}`}
+      className={cn(
+        "group grid md:grid-cols-[minmax(0,1fr)_420px_160px_120px] gap-2 md:gap-4 px-4 py-3 hover:bg-muted/30 transition-all rounded-md",
+        deleting && "opacity-0 -translate-x-1 pointer-events-none",
+      )}
+    >
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-medium truncate">{job.company}</span>
+          <Link
+            href={job.link}
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground hover:text-foreground shrink-0"
+            aria-label="Open job link"
+            title="Open job link"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+          <CopyLinkButton link={job.link} />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDialog({ kind: "note", jobId: job.id });
+            }}
+            className={cn(
+              "relative shrink-0 transition-colors",
+              totalNotes > 0
+                ? "text-amber-500 dark:text-amber-300"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-label={totalNotes > 0 ? `${totalNotes} note(s)` : "Add a note"}
+            title={totalNotes > 0 ? `${totalNotes} note(s)` : "Add a note"}
+          >
+            <MessageSquareText className="h-3.5 w-3.5" />
+            {totalNotes > 0 && (
+              <span className="absolute -top-1.5 -right-2 text-[9px] font-semibold leading-none rounded-full bg-amber-500 text-white px-1 py-0.5 min-w-[14px] text-center">
+                {totalNotes}
+              </span>
+            )}
+          </button>
+          {job.notes && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="text-amber-500 dark:text-amber-300 shrink-0 cursor-help"
+                  aria-label="Has notes"
+                >
+                  <StickyNote className="h-3.5 w-3.5" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent
+                side="right"
+                className="max-w-xs whitespace-pre-wrap"
+              >
+                {job.notes}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+        <div className="text-sm text-muted-foreground truncate">
+          {job.position || "—"}
+        </div>
+      </div>
+      <MyTrackingControls
+        job={job}
+        currentUserId={currentUserId}
+        currentUserName={currentUserName}
+        followUpDelayDays={followUpDelayDays}
+        onOpenDialog={onOpenDialog}
+        onEntryUpdated={onEntryUpdated}
+      />
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Avatar className="h-5 w-5">
+          {job.addedBy.image && (
+            <AvatarImage src={job.addedBy.image} alt={job.addedBy.displayName} />
+          )}
+          <AvatarFallback className="text-[9px]">
+            {initials(job.addedBy.displayName)}
+          </AvatarFallback>
+        </Avatar>
+        <span className="hidden sm:inline">{job.addedBy.displayName}</span>
+        <span
+          className="font-mono text-[11px] tabular-nums"
+          suppressHydrationWarning
+        >
+          {formatRelative(job.createdAt)}
+        </span>
+      </div>
+      <div className="flex items-center justify-end gap-1">
+        <button
+          type="button"
+          onClick={() => onOpenDialog({ kind: "info", jobId: job.id })}
+          className="transition-opacity p-2 md:p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+          aria-label="View group activity"
+          title="View group activity"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+        {canUseTemplates && (
+          <>
+            <TemplateButton
+              icon={UserPlus}
+              label="Generate LinkedIn connection request"
+              showDot={showTemplateDot}
+              onClick={() =>
+                onOpenDialog({
+                  kind: "template",
+                  jobId: job.id,
+                  template: "connection",
+                })
+              }
+            />
+            <TemplateButton
+              icon={Handshake}
+              label="Generate referral-ask message"
+              showDot={showTemplateDot}
+              onClick={() =>
+                onOpenDialog({
+                  kind: "template",
+                  jobId: job.id,
+                  template: "referral",
+                })
+              }
+            />
+          </>
+        )}
+        {(job.addedBy.id === currentUserId || isAdmin) && (
+          <>
+            <button
+              type="button"
+              onClick={() => onOpenDialog({ kind: "edit", jobId: job.id })}
+              className="can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity p-2 md:p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+              aria-label="Edit job"
+              title="Edit job"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => onDelete(job.id)}
+              className="can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity p-2 md:p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+              aria-label="Delete job"
+              title="Delete job"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+    </li>
+  );
+});
+
+function TemplateButton({
+  icon: Icon,
+  label,
+  showDot,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  showDot: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn(
+        "relative transition-opacity p-1 rounded text-muted-foreground hover:text-primary hover:bg-muted",
+        // Keep visible while the NEW dot is showing so users notice the
+        // feature; once used, fall back to hover-reveal.
+        showDot
+          ? "opacity-100"
+          : "can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100",
+      )}
+      aria-label={label}
+      title={label}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {showDot && (
+        <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+        </span>
+      )}
+    </button>
+  );
+}
 
 function MyTrackingControls({
   job,
   currentUserId,
   currentUserName,
   followUpDelayDays,
+  onOpenDialog,
   onEntryUpdated,
 }: {
   job: Job;
   currentUserId: string;
   currentUserName: string;
   followUpDelayDays: number;
-  onEntryUpdated: (entry: EntryUpdate) => void;
+  onOpenDialog: OpenDialogFn;
+  onEntryUpdated: (jobId: string, entry: EntryUpdate) => void;
 }) {
   const entry = job.entries.find((e) => e.userId === currentUserId);
   const due = getFollowUpSuggestions(entry, followUpDelayDays);
+  const referral = entry?.referral ?? "NONE";
+  const coldSent = entry?.coldEmailSent ?? false;
 
   return (
     <div className="flex flex-col items-start gap-1.5">
@@ -859,7 +1130,7 @@ function MyTrackingControls({
           referral={entry?.referral ?? "NONE"}
           editable
           onUpdated={(upd) =>
-            onEntryUpdated({
+            onEntryUpdated(job.id, {
               id: upd.entryId,
               userId: currentUserId,
               status: upd.status,
@@ -868,18 +1139,48 @@ function MyTrackingControls({
             })
           }
         />
-        <ReferralTrackingDialog
-          jobId={job.id}
-          userId={currentUserId}
-          entry={entry}
-          onUpdated={onEntryUpdated}
-        />
-        <ColdEmailDialog
-          jobId={job.id}
-          userId={currentUserId}
-          entry={entry}
-          onUpdated={onEntryUpdated}
-        />
+        <button
+          type="button"
+          onClick={() => onOpenDialog({ kind: "referral", jobId: job.id })}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-[color,background-color,border-color,transform] active:scale-95 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+            referral === "NONE"
+              ? "bg-muted/40 text-muted-foreground border-border"
+              : REFERRAL_STATUS_STYLE[referral],
+          )}
+          aria-label="Update LinkedIn referral status"
+          title="LinkedIn referral"
+        >
+          <HandHelping className="h-3 w-3" />
+          {entry?.referralFollowUpSent
+            ? "Referral follow-up sent"
+            : referral === "NONE"
+              ? "Referral"
+              : REFERRAL_STATUS_LABEL[referral]}
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenDialog({ kind: "cold", jobId: job.id })}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-[color,background-color,border-color,transform] active:scale-95 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            coldSent
+              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40"
+              : "bg-muted/40 text-muted-foreground border-border",
+          )}
+          aria-label="Manage cold email"
+          title="Cold email / cold DM"
+        >
+          {coldSent ? (
+            <MailCheck className="h-3 w-3" />
+          ) : (
+            <Mail className="h-3 w-3" />
+          )}
+          {entry?.coldEmailFollowUpSent
+            ? "Cold follow-up sent"
+            : coldSent
+              ? "Cold sent"
+              : "Cold email"}
+        </button>
       </div>
       {due.length > 0 && (
         <div className="inline-flex flex-wrap items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
@@ -892,17 +1193,20 @@ function MyTrackingControls({
 }
 
 function ReferralTrackingDialog({
+  open,
+  onOpenChange,
   jobId,
   userId,
   entry,
   onUpdated,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   jobId: string;
   userId: string;
   entry?: Entry;
-  onUpdated: (entry: EntryUpdate) => void;
+  onUpdated: (jobId: string, entry: EntryUpdate) => void;
 }) {
-  const [open, setOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [draftReferral, setDraftReferral] = React.useState<ReferralStatus>(
     entry?.referral ?? "NONE",
@@ -923,7 +1227,7 @@ function ReferralTrackingDialog({
         (referral === "NONE" ? "" : todayInputValue()),
     );
     setFollowUpSent(entry?.referralFollowUpSent ?? false);
-  }, [open, entry?.referral, entry?.referralSentAt, entry?.referralFollowUpSent]);
+  }, [open, jobId, entry?.referral, entry?.referralSentAt, entry?.referralFollowUpSent]);
 
   function selectReferralStatus(nextReferral: ReferralStatus) {
     setDraftReferral(nextReferral);
@@ -961,7 +1265,7 @@ function ReferralTrackingDialog({
       });
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as Entry;
-      onUpdated({
+      onUpdated(jobId, {
         id: data.id,
         userId: data.userId,
         status: data.status,
@@ -975,7 +1279,7 @@ function ReferralTrackingDialog({
         updatedAt: new Date(data.updatedAt),
       });
       toast.success("Referral updated");
-      setOpen(false);
+      onOpenChange(false);
     } catch {
       toast.error("Couldn't save referral");
     } finally {
@@ -983,30 +1287,8 @@ function ReferralTrackingDialog({
     }
   }
 
-  const referral = entry?.referral ?? "NONE";
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-[color,background-color,border-color,transform] active:scale-95 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
-            referral === "NONE"
-              ? "bg-muted/40 text-muted-foreground border-border"
-              : REFERRAL_STATUS_STYLE[referral],
-          )}
-          aria-label="Update LinkedIn referral status"
-          title="LinkedIn referral"
-        >
-          <HandHelping className="h-3 w-3" />
-          {entry?.referralFollowUpSent
-            ? "Referral follow-up sent"
-            : referral === "NONE"
-              ? "Referral"
-              : REFERRAL_STATUS_LABEL[referral]}
-        </button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>LinkedIn referral</DialogTitle>
@@ -1041,13 +1323,13 @@ function ReferralTrackingDialog({
           </div>
           <div className="space-y-1.5">
             <label
-              htmlFor={`referral-date-${jobId}`}
+              htmlFor="referral-sent-date"
               className="text-xs font-medium text-muted-foreground"
             >
               Sent date
             </label>
             <Input
-              id={`referral-date-${jobId}`}
+              id="referral-sent-date"
               type="date"
               value={sentDate}
               onChange={(e) => setSentDate(e.target.value)}
@@ -1071,7 +1353,11 @@ function ReferralTrackingDialog({
           </label>
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button size="sm" onClick={save} disabled={saving}>
@@ -1084,17 +1370,20 @@ function ReferralTrackingDialog({
 }
 
 function ColdEmailDialog({
+  open,
+  onOpenChange,
   jobId,
   userId,
   entry,
   onUpdated,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   jobId: string;
   userId: string;
   entry?: Entry;
-  onUpdated: (entry: EntryUpdate) => void;
+  onUpdated: (jobId: string, entry: EntryUpdate) => void;
 }) {
-  const [open, setOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [sentDate, setSentDate] = React.useState(
     dateInputValue(entry?.coldEmailSentAt),
@@ -1107,7 +1396,7 @@ function ColdEmailDialog({
     if (!open) return;
     setSentDate(dateInputValue(entry?.coldEmailSentAt) || todayInputValue());
     setFollowUpSent(entry?.coldEmailFollowUpSent ?? false);
-  }, [open, entry?.coldEmailSentAt, entry?.coldEmailFollowUpSent]);
+  }, [open, jobId, entry?.coldEmailSentAt, entry?.coldEmailFollowUpSent]);
 
   async function save(nextSent: boolean) {
     setSaving(true);
@@ -1125,7 +1414,7 @@ function ColdEmailDialog({
       });
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as Entry;
-      onUpdated({
+      onUpdated(jobId, {
         id: data.id,
         userId: data.userId,
         status: data.status,
@@ -1138,8 +1427,10 @@ function ColdEmailDialog({
         note: data.note,
         updatedAt: new Date(data.updatedAt),
       });
-      toast.success(data.coldEmailSent ? "Cold email marked sent" : "Cold email cleared");
-      setOpen(false);
+      toast.success(
+        data.coldEmailSent ? "Cold email marked sent" : "Cold email cleared",
+      );
+      onOpenChange(false);
     } catch {
       toast.error("Couldn't save cold email status");
     } finally {
@@ -1150,27 +1441,7 @@ function ColdEmailDialog({
   const sent = entry?.coldEmailSent ?? false;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-[color,background-color,border-color,transform] active:scale-95 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            sent
-              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40"
-              : "bg-muted/40 text-muted-foreground border-border",
-          )}
-          aria-label="Manage cold email"
-          title="Cold email / cold DM"
-        >
-          {sent ? <MailCheck className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
-          {entry?.coldEmailFollowUpSent
-            ? "Cold follow-up sent"
-            : sent
-              ? "Cold sent"
-              : "Cold email"}
-        </button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Cold email / DM</DialogTitle>
@@ -1181,13 +1452,13 @@ function ColdEmailDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label
-              htmlFor={`cold-date-${jobId}`}
+              htmlFor="cold-sent-date"
               className="text-xs font-medium text-muted-foreground"
             >
               Sent date
             </label>
             <Input
-              id={`cold-date-${jobId}`}
+              id="cold-sent-date"
               type="date"
               value={sentDate}
               onChange={(e) => setSentDate(e.target.value)}
@@ -1218,7 +1489,11 @@ function ColdEmailDialog({
             Clear
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button size="sm" onClick={() => save(true)} disabled={saving}>
@@ -1231,7 +1506,17 @@ function ColdEmailDialog({
   );
 }
 
-function JobInfoDialog({ job, users }: { job: Job; users: User[] }) {
+function JobInfoDialog({
+  open,
+  onOpenChange,
+  job,
+  users,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  job: Job;
+  users: User[];
+}) {
   const applied = users.filter((u) => {
     const e = job.entries.find((x) => x.userId === u.id);
     return (
@@ -1246,26 +1531,9 @@ function JobInfoDialog({ job, users }: { job: Job; users: User[] }) {
   const coldSent = users.filter((u) =>
     job.entries.some((e) => e.userId === u.id && e.coldEmailSent),
   );
-  const total =
-    applied.length + referralRequested.length + coldSent.length;
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className="transition-opacity p-2 md:p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
-          aria-label="View group activity"
-          title="View group activity"
-        >
-          <Info className="h-3.5 w-3.5" />
-          {total > 0 && (
-            <span className="sr-only">
-              {total} group activity updates
-            </span>
-          )}
-        </button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="min-w-0">
           <DialogTitle>Group activity</DialogTitle>

@@ -10,18 +10,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { cn } from "@/lib/utils";
 import {
   TemplateKind,
   getDefaultTemplate,
   renderTemplate,
 } from "@/lib/templates";
-
-const FIRST_USE_KEY = "fs:whatsnew:templates:first-click";
 
 type Job = {
   company: string;
@@ -36,43 +32,22 @@ type CurrentUserTemplates = {
   referralTemplate: string | null;
 };
 
+// Controlled dialog — the board renders exactly ONE instance and feeds it the
+// active job. (It used to be two instances per row, which meant hundreds of
+// mounted dialog roots and visible lag opening any of them.)
 export function MessageTemplateDialog({
+  open,
+  onOpenChange,
   kind,
   job,
   user,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   kind: TemplateKind;
   job: Job;
   user: CurrentUserTemplates;
 }) {
-  const [open, setOpen] = React.useState(false);
-  const [showNewDot, setShowNewDot] = React.useState(false);
-
-  React.useEffect(() => {
-    try {
-      setShowNewDot(localStorage.getItem(FIRST_USE_KEY) !== "1");
-    } catch {
-      // localStorage blocked — skip the dot rather than show it forever.
-    }
-  }, []);
-
-  function markUsed() {
-    setShowNewDot(false);
-    try {
-      localStorage.setItem(FIRST_USE_KEY, "1");
-    } catch {
-      // Harmless if blocked.
-    }
-    // Notify any other template buttons on the page to hide their dot too.
-    window.dispatchEvent(new Event("fs:templates:used"));
-  }
-
-  React.useEffect(() => {
-    const handler = () => setShowNewDot(false);
-    window.addEventListener("fs:templates:used", handler);
-    return () => window.removeEventListener("fs:templates:used", handler);
-  }, []);
-
   const source =
     (kind === "connection" ? user.connectionTemplate : user.referralTemplate) ??
     getDefaultTemplate(kind);
@@ -94,60 +69,27 @@ export function MessageTemplateDialog({
   );
   const [draft, setDraft] = React.useState(rendered);
 
-  // When the dialog re-opens (or underlying template changes), refresh the
-  // draft so the user always starts from the latest saved template.
+  // When the dialog opens (or the underlying job/template changes), refresh
+  // the draft so the user always starts from the latest saved template.
   React.useEffect(() => {
     if (open) setDraft(rendered);
   }, [open, rendered]);
 
   const Icon = kind === "connection" ? UserPlus : Handshake;
-  const label =
-    kind === "connection" ? "Connection request" : "Referral ask";
-  const tooltip =
-    kind === "connection"
-      ? "Generate LinkedIn connection request"
-      : "Generate referral-ask message";
+  const label = kind === "connection" ? "Connection request" : "Referral ask";
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(draft);
       toast.success("Copied to clipboard");
-      setOpen(false);
+      onOpenChange(false);
     } catch {
       toast.error("Couldn't copy — your browser blocked clipboard access");
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            markUsed();
-          }}
-          className={cn(
-            "relative transition-opacity p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted",
-            "hover:text-primary",
-            // Keep visible when the NEW dot is showing so users notice the feature;
-            // once used (or on second page load), fall back to hover-reveal.
-            showNewDot
-              ? "opacity-100"
-              : "can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100",
-          )}
-          aria-label={tooltip}
-          title={tooltip}
-        >
-          <Icon className="h-3.5 w-3.5" />
-          {showNewDot && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-            </span>
-          )}
-        </button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="min-w-0">
           <DialogTitle className="flex items-center gap-2">
@@ -193,7 +135,7 @@ export function MessageTemplateDialog({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>

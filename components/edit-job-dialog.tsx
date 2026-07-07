@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Pencil } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -15,7 +15,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -31,6 +30,8 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 type Props = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   job: {
     id: string;
     company: string;
@@ -47,8 +48,9 @@ type Props = {
   }) => void;
 };
 
-export function EditJobDialog({ job, onSaved }: Props) {
-  const [open, setOpen] = React.useState(false);
+// Controlled dialog — one instance on the board. The old per-row version
+// mounted a react-hook-form + zod resolver for every row on the page.
+export function EditJobDialog({ open, onOpenChange, job, onSaved }: Props) {
   const [submitting, setSubmitting] = React.useState(false);
   const router = useRouter();
   const {
@@ -91,7 +93,7 @@ export function EditJobDialog({ job, onSaved }: Props) {
       if (!res.ok) throw new Error(await res.text());
       const updated = await res.json();
       toast.success("Job updated", { description: data.company });
-      setOpen(false);
+      onOpenChange(false);
       onSaved?.(updated);
       router.refresh();
     } catch {
@@ -102,16 +104,7 @@ export function EditJobDialog({ job, onSaved }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          className="can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity p-2 md:p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-          aria-label="Edit job"
-          title="Edit job"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit job</DialogTitle>
@@ -193,7 +186,7 @@ export function EditJobDialog({ job, onSaved }: Props) {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
