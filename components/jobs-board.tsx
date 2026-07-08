@@ -253,6 +253,20 @@ export function JobsBoard({
     return () => window.removeEventListener("fs:jobs:focus", handler);
   }, [initialJobs.length]);
 
+  // A freshly created job (from the add dialog) is inserted locally so it
+  // shows up instantly — no blocking refetch of the whole board.
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const job = (e as CustomEvent<{ job?: Job }>).detail?.job;
+      if (!job?.id) return;
+      setJobs((prev) =>
+        prev.some((j) => j.id === job.id) ? prev : [job, ...prev],
+      );
+    };
+    window.addEventListener("fs:jobs:created", handler);
+    return () => window.removeEventListener("fs:jobs:created", handler);
+  }, []);
+
   React.useEffect(() => {
     if (!focusedJobId) return;
     // Let React flush the filter/pagination resets before we try to scroll.
@@ -421,26 +435,30 @@ export function JobsBoard({
   }, [filtered, sort, mounted, visibleCount]);
 
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
-  const handleDelete = React.useCallback(
-    async (id: string) => {
-      if (!confirm("Delete this job? This also clears everyone's status."))
-        return;
+  // Read current jobs through a ref so callbacks can snapshot for rollback
+  // without depending on `jobs` (which would defeat row memoization).
+  const jobsRef = React.useRef(jobs);
+  jobsRef.current = jobs;
+  const handleDelete = React.useCallback(async (id: string) => {
+    if (!confirm("Delete this job? This also clears everyone's status."))
+      return;
+    // Optimistic: fade the row out immediately; restore if the server says no.
+    const snapshot = jobsRef.current;
+    setDeletingId(id);
+    setTimeout(() => {
+      setJobs((s) => s.filter((j) => j.id !== id));
+      setDeletingId(null);
+    }, 200);
+    try {
       const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        // Let the row fade/slide out via its transition before removing it.
-        setDeletingId(id);
-        toast.success("Job deleted");
-        setTimeout(() => {
-          setJobs((s) => s.filter((j) => j.id !== id));
-          setDeletingId(null);
-          router.refresh();
-        }, 200);
-      } else {
-        toast.error("Couldn't delete");
-      }
-    },
-    [router],
-  );
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Job deleted");
+    } catch {
+      setJobs(snapshot);
+      setDeletingId(null);
+      toast.error("Couldn't delete — the job was restored.");
+    }
+  }, []);
 
   // Stable per-board callbacks so memoized rows don't re-render when siblings
   // change. Rows pass their own jobId back in.
@@ -1207,7 +1225,6 @@ function ReferralTrackingDialog({
   entry?: Entry;
   onUpdated: (jobId: string, entry: EntryUpdate) => void;
 }) {
-  const [saving, setSaving] = React.useState(false);
   const [draftReferral, setDraftReferral] = React.useState<ReferralStatus>(
     entry?.referral ?? "NONE",
   );
@@ -1236,8 +1253,7 @@ function ReferralTrackingDialog({
     );
   }
 
-  async function save() {
-    setSaving(true);
+  function save() {
     let nextStatus: AppStatus | undefined;
     const currentStatus = entry?.status ?? "NONE";
     if (draftReferral === "RECEIVED" && currentStatus === "APPLIED") {
@@ -1246,45 +1262,46 @@ function ReferralTrackingDialog({
     if (draftReferral === "REQUESTED" && currentStatus === "APPLIED_WITH_REFERRAL") {
       nextStatus = "APPLIED";
     }
+    const nextFollowUpSent = draftReferral === "NONE" ? false : followUpSent;
     const nextSentDate =
       draftReferral === "NONE" ? null : sentDate || todayInputValue();
 
-    try {
-      const res = await fetch("/api/entries", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jobId,
-          userId,
-          referral: draftReferral,
-          referralSentAt: nextSentDate,
-          referralFollowUpSent:
-            draftReferral === "NONE" ? false : followUpSent,
-          ...(nextStatus && { status: nextStatus }),
-        }),
+    // Optimistic: reflect the change and close now; the server round-trip
+    // (slow on free-tier hosting) reconciles in the background.
+    const prev = entrySnapshot(entry, userId, jobId);
+    onUpdated(jobId, {
+      id: entry?.id ?? `optimistic-${jobId}`,
+      userId,
+      referral: draftReferral,
+      referralSentAt: nextSentDate,
+      referralFollowUpSent: nextFollowUpSent,
+      ...(nextStatus && { status: nextStatus }),
+      updatedAt: new Date(),
+    });
+    onOpenChange(false);
+
+    fetch("/api/entries", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jobId,
+        userId,
+        referral: draftReferral,
+        referralSentAt: nextSentDate,
+        referralFollowUpSent: nextFollowUpSent,
+        ...(nextStatus && { status: nextStatus }),
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        const data = (await res.json()) as Entry;
+        onUpdated(jobId, serverEntryUpdate(data));
+        toast.success("Referral updated");
+      })
+      .catch(() => {
+        onUpdated(jobId, prev);
+        toast.error("Couldn't save referral — reverted.");
       });
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as Entry;
-      onUpdated(jobId, {
-        id: data.id,
-        userId: data.userId,
-        status: data.status,
-        referral: data.referral,
-        referralSentAt: data.referralSentAt,
-        referralFollowUpSent: data.referralFollowUpSent,
-        coldEmailSent: data.coldEmailSent,
-        coldEmailSentAt: data.coldEmailSentAt,
-        coldEmailFollowUpSent: data.coldEmailFollowUpSent,
-        note: data.note,
-        updatedAt: new Date(data.updatedAt),
-      });
-      toast.success("Referral updated");
-      onOpenChange(false);
-    } catch {
-      toast.error("Couldn't save referral");
-    } finally {
-      setSaving(false);
-    }
   }
 
   return (
@@ -1360,8 +1377,8 @@ function ReferralTrackingDialog({
           >
             Cancel
           </Button>
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
+          <Button size="sm" onClick={save}>
+            Save
           </Button>
         </div>
       </DialogContent>
@@ -1384,7 +1401,6 @@ function ColdEmailDialog({
   entry?: Entry;
   onUpdated: (jobId: string, entry: EntryUpdate) => void;
 }) {
-  const [saving, setSaving] = React.useState(false);
   const [sentDate, setSentDate] = React.useState(
     dateInputValue(entry?.coldEmailSentAt),
   );
@@ -1398,44 +1414,45 @@ function ColdEmailDialog({
     setFollowUpSent(entry?.coldEmailFollowUpSent ?? false);
   }, [open, jobId, entry?.coldEmailSentAt, entry?.coldEmailFollowUpSent]);
 
-  async function save(nextSent: boolean) {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/entries", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jobId,
-          userId,
-          coldEmailSent: nextSent,
-          coldEmailSentAt: nextSent ? sentDate || todayInputValue() : null,
-          coldEmailFollowUpSent: nextSent ? followUpSent : false,
-        }),
+  function save(nextSent: boolean) {
+    const nextSentAt = nextSent ? sentDate || todayInputValue() : null;
+    const nextFollowUp = nextSent ? followUpSent : false;
+
+    // Optimistic: reflect the change and close now; reconcile in background.
+    const prev = entrySnapshot(entry, userId, jobId);
+    onUpdated(jobId, {
+      id: entry?.id ?? `optimistic-${jobId}`,
+      userId,
+      coldEmailSent: nextSent,
+      coldEmailSentAt: nextSentAt,
+      coldEmailFollowUpSent: nextFollowUp,
+      updatedAt: new Date(),
+    });
+    onOpenChange(false);
+
+    fetch("/api/entries", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jobId,
+        userId,
+        coldEmailSent: nextSent,
+        coldEmailSentAt: nextSentAt,
+        coldEmailFollowUpSent: nextFollowUp,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        const data = (await res.json()) as Entry;
+        onUpdated(jobId, serverEntryUpdate(data));
+        toast.success(
+          data.coldEmailSent ? "Cold email marked sent" : "Cold email cleared",
+        );
+      })
+      .catch(() => {
+        onUpdated(jobId, prev);
+        toast.error("Couldn't save cold email status — reverted.");
       });
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as Entry;
-      onUpdated(jobId, {
-        id: data.id,
-        userId: data.userId,
-        status: data.status,
-        referral: data.referral,
-        referralSentAt: data.referralSentAt,
-        referralFollowUpSent: data.referralFollowUpSent,
-        coldEmailSent: data.coldEmailSent,
-        coldEmailSentAt: data.coldEmailSentAt,
-        coldEmailFollowUpSent: data.coldEmailFollowUpSent,
-        note: data.note,
-        updatedAt: new Date(data.updatedAt),
-      });
-      toast.success(
-        data.coldEmailSent ? "Cold email marked sent" : "Cold email cleared",
-      );
-      onOpenChange(false);
-    } catch {
-      toast.error("Couldn't save cold email status");
-    } finally {
-      setSaving(false);
-    }
   }
 
   const sent = entry?.coldEmailSent ?? false;
@@ -1484,7 +1501,7 @@ function ColdEmailDialog({
             variant="ghost"
             size="sm"
             onClick={() => save(false)}
-            disabled={saving || !sent}
+            disabled={!sent}
           >
             Clear
           </Button>
@@ -1496,8 +1513,8 @@ function ColdEmailDialog({
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={() => save(true)} disabled={saving}>
-              {saving ? "Saving..." : "Save sent"}
+            <Button size="sm" onClick={() => save(true)}>
+              Save sent
             </Button>
           </div>
         </div>
@@ -1587,6 +1604,47 @@ function ActivitySection({ title, users }: { title: string; users: User[] }) {
       )}
     </section>
   );
+}
+
+// Full field snapshot used to roll back an optimistic update if the server
+// rejects it. For a user with no entry yet, all-NONE renders identically to
+// "no entry", so reverting to it restores the visible state.
+function entrySnapshot(
+  entry: Entry | undefined,
+  userId: string,
+  jobId: string,
+): EntryUpdate {
+  if (entry) return { ...entry };
+  return {
+    id: `optimistic-${jobId}`,
+    userId,
+    status: "NONE",
+    referral: "NONE",
+    referralSentAt: null,
+    referralFollowUpSent: false,
+    coldEmailSent: false,
+    coldEmailSentAt: null,
+    coldEmailFollowUpSent: false,
+    note: null,
+    updatedAt: new Date(),
+  };
+}
+
+// Server response → authoritative EntryUpdate (fixes optimistic ids/fields).
+function serverEntryUpdate(data: Entry): EntryUpdate {
+  return {
+    id: data.id,
+    userId: data.userId,
+    status: data.status,
+    referral: data.referral,
+    referralSentAt: data.referralSentAt,
+    referralFollowUpSent: data.referralFollowUpSent,
+    coldEmailSent: data.coldEmailSent,
+    coldEmailSentAt: data.coldEmailSentAt,
+    coldEmailFollowUpSent: data.coldEmailFollowUpSent,
+    note: data.note,
+    updatedAt: new Date(data.updatedAt),
+  };
 }
 
 function dateInputValue(value: Date | string | null | undefined): string {

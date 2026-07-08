@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,7 +32,6 @@ type FormData = z.infer<typeof schema>;
 export function AddJobDialog({ triggerClassName }: { triggerClassName?: string }) {
   const [open, setOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const router = useRouter();
   const {
     register,
     handleSubmit,
@@ -97,10 +95,16 @@ export function AddJobDialog({ triggerClassName }: { triggerClassName?: string }
         return;
       }
       if (!res.ok) throw new Error(await res.text());
+      const job = await res.json();
       toast.success("Job added", { description: data.company });
       reset();
       setOpen(false);
-      router.refresh();
+      // The response carries the full row (addedBy + entries) — the board
+      // inserts it locally, so the new job shows up instantly instead of
+      // waiting on a full router.refresh() refetch of every job.
+      window.dispatchEvent(
+        new CustomEvent("fs:jobs:created", { detail: { job } }),
+      );
     } catch {
       toast.error("Couldn't add — try again.");
     } finally {

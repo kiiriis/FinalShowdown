@@ -70,6 +70,8 @@ The server trusts whatever the client sends (after authz). If you want to harden
 3. `app/api/entries/route.ts` validates with zod, checks that `userId === session.user.id` **or** the caller is admin (`isAdminEmail`), then `prisma.jobEntry.upsert` on the compound unique key.
 4. If the server rejects, the pill rolls back its optimistic update and shows a toast.
 
+All board mutations are optimistic: the change is applied to local state and the dialog closes immediately, the request runs in the background, and the UI reverts with an error toast if the server rejects it. The actor never blocks on `router.refresh()` — the mutation response carries the authoritative row. The one exception is marking a job EXPIRED, which triggers a refresh to pull in the server-side cascade to other users.
+
 ### Write path — creating / editing / deleting a job
 
 - `POST /api/jobs` — any signed-in user; rejects duplicate links with 409.

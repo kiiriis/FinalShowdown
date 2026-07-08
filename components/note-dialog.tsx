@@ -54,7 +54,6 @@ export function NoteDialog({
   const myEntry = entries.find((e) => e.userId === currentUserId);
   const me = users.find((u) => u.id === currentUserId);
   const [draft, setDraft] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
   const [preview, setPreview] = React.useState(false);
 
   // Load the active job's note on every open (the instance is reused across
@@ -72,35 +71,34 @@ export function NoteDialog({
     (e) => e.userId !== currentUserId && e.note && e.note.trim().length > 0,
   );
 
-  async function save() {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/entries", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jobId,
-          userId: currentUserId,
-          note: draft.trim() === "" ? null : draft.trim(),
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as {
-        id: string;
-        note: string | null;
-      };
-      onSaved({
-        entryId: data.id,
+  function save() {
+    const next = draft.trim() === "" ? null : draft.trim();
+    const prevNote = myEntry?.note ?? null;
+    const localEntryId = myEntry?.id ?? `optimistic-${jobId}`;
+
+    // Optimistic: reflect + close now; reconcile in the background.
+    onSaved({ entryId: localEntryId, userId: currentUserId, note: next });
+    onOpenChange(false);
+
+    fetch("/api/entries", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jobId,
         userId: currentUserId,
-        note: data.note,
+        note: next,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        const data = (await res.json()) as { id: string; note: string | null };
+        onSaved({ entryId: data.id, userId: currentUserId, note: data.note });
+        toast.success(data.note ? "Note saved" : "Note cleared");
+      })
+      .catch(() => {
+        onSaved({ entryId: localEntryId, userId: currentUserId, note: prevNote });
+        toast.error("Couldn't save note — reverted.");
       });
-      toast.success(data.note ? "Note saved" : "Note cleared");
-      onOpenChange(false);
-    } catch {
-      toast.error("Couldn't save note");
-    } finally {
-      setSaving(false);
-    }
   }
 
   return (
@@ -225,12 +223,11 @@ export function NoteDialog({
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            disabled={saving}
           >
             Cancel
           </Button>
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+          <Button size="sm" onClick={save}>
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>

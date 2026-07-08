@@ -61,6 +61,8 @@ export async function POST(req: Request) {
     );
   }
 
+  // Return the same shape the board renders (addedBy + entries) so the
+  // client can insert the new row locally without a full refetch.
   const job = await prisma.job.create({
     data: {
       company: parsed.data.company,
@@ -75,6 +77,12 @@ export async function POST(req: Request) {
           status: "APPLIED",
         },
       },
+    },
+    include: {
+      addedBy: {
+        select: { id: true, displayName: true, name: true, image: true },
+      },
+      entries: true,
     },
   });
   emitChange("job.created", session.user.id);

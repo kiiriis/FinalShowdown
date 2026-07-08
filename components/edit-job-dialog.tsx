@@ -1,12 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -51,8 +49,6 @@ type Props = {
 // Controlled dialog — one instance on the board. The old per-row version
 // mounted a react-hook-form + zod resolver for every row on the page.
 export function EditJobDialog({ open, onOpenChange, job, onSaved }: Props) {
-  const [submitting, setSubmitting] = React.useState(false);
-  const router = useRouter();
   const {
     register,
     handleSubmit,
@@ -79,28 +75,47 @@ export function EditJobDialog({ open, onOpenChange, job, onSaved }: Props) {
     }
   }, [open, job, reset]);
 
-  async function onSubmit(data: FormData) {
-    setSubmitting(true);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...data,
-          notes: data.notes?.trim() ? data.notes : null,
-        }),
+  function onSubmit(data: FormData) {
+    const notes = data.notes?.trim() ? data.notes : null;
+    const prev = {
+      id: job.id,
+      company: job.company,
+      position: job.position,
+      link: job.link,
+      notes: job.notes ?? null,
+    };
+
+    // Optimistic: reflect + close now; reconcile in the background.
+    onSaved?.({ id: job.id, ...data, notes });
+    onOpenChange(false);
+
+    fetch(`/api/jobs/${job.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...data, notes }),
+    })
+      .then(async (res) => {
+        if (res.status === 409) {
+          const clash = (await res.json().catch(() => null)) as {
+            company?: string;
+          } | null;
+          throw new Error(
+            clash?.company
+              ? `Another job (${clash.company}) already uses that link.`
+              : "Another job already uses that link.",
+          );
+        }
+        if (!res.ok) throw new Error("Couldn't save.");
+        const updated = await res.json();
+        onSaved?.(updated);
+        toast.success("Job updated", { description: data.company });
+      })
+      .catch((err: Error) => {
+        onSaved?.(prev);
+        toast.error("Edit reverted", {
+          description: err.message || "Couldn't save — try again.",
+        });
       });
-      if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      toast.success("Job updated", { description: data.company });
-      onOpenChange(false);
-      onSaved?.(updated);
-      router.refresh();
-    } catch {
-      toast.error("Couldn't save — try again.");
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   return (
@@ -190,10 +205,7 @@ export function EditJobDialog({ open, onOpenChange, job, onSaved }: Props) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save changes
-            </Button>
+            <Button type="submit">Save changes</Button>
           </DialogFooter>
         </form>
       </DialogContent>
