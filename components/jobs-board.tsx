@@ -205,10 +205,46 @@ export function JobsBoard({
     setVisibleCount(PAGE_SIZE);
   }, [deferredQuery, myStatus, onlyReferrals, onlyUntouched, sort, dateFrom, dateTo]);
 
-  const searchIndex = React.useMemo(
-    () => new Map(jobs.map((j) => [j.id, buildSearchText(j)])),
-    [jobs],
-  );
+  // Everything derived from a job that search/sort/group needs, computed ONCE
+  // per data change. Keystrokes must never re-parse dates or rebuild search
+  // text — that's what made typing feel sluggish at ~2,300 jobs.
+  const jobMeta = React.useMemo(() => {
+    const m = new Map<string, { text: string; ms: number; dayKey: string }>();
+    for (const j of jobs) {
+      const d = new Date(j.createdAt);
+      m.set(j.id, {
+        text: buildSearchText(j),
+        ms: d.getTime(),
+        dayKey: localDayKey(d),
+      });
+    }
+    return m;
+  }, [jobs]);
+
+  // Pre-sorted once per (jobs, sort). Filtering preserves order, so typing in
+  // the search box only pays a linear scan — never a re-sort.
+  const sortedJobs = React.useMemo(() => {
+    const arr = [...jobs];
+    if (sort === "company") {
+      arr.sort((a, b) => a.company.localeCompare(b.company));
+    } else if (sort === "most-applied") {
+      const score = new Map(
+        jobs.map((j) => [
+          j.id,
+          j.entries.filter(
+            (e) =>
+              e.status === "APPLIED" || e.status === "APPLIED_WITH_REFERRAL",
+          ).length,
+        ]),
+      );
+      arr.sort((a, b) => (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0));
+    } else {
+      arr.sort(
+        (a, b) => (jobMeta.get(b.id)?.ms ?? 0) - (jobMeta.get(a.id)?.ms ?? 0),
+      );
+    }
+    return arr;
+  }, [jobs, sort, jobMeta]);
 
   const currentUserName = React.useMemo(
     () => users.find((u) => u.id === currentUserId)?.displayName ?? "You",
@@ -295,12 +331,12 @@ export function JobsBoard({
   }, [focusedJobId]);
 
   const filtered = React.useMemo(() => {
-    let out = jobs;
+    let out = sortedJobs;
     const q = normalizeQuery(deferredQuery);
     if (q) {
       const tokens = q.split(/\s+/).filter(Boolean);
       out = out.filter((j) => {
-        const hay = searchIndex.get(j.id);
+        const hay = jobMeta.get(j.id)?.text;
         return hay !== undefined && tokens.every((t) => hay.includes(t));
       });
     }
@@ -329,38 +365,23 @@ export function JobsBoard({
       let hi = dateTo;
       if (lo && hi && lo > hi) [lo, hi] = [hi, lo];
       out = out.filter((j) => {
-        const key = localDayKey(j.createdAt);
+        const key = jobMeta.get(j.id)?.dayKey ?? localDayKey(j.createdAt);
         if (lo && key < lo) return false;
         if (hi && key > hi) return false;
         return true;
       });
     }
-    if (sort === "company") {
-      out = [...out].sort((a, b) => a.company.localeCompare(b.company));
-    } else if (sort === "most-applied") {
-      const score = (j: Job) =>
-        j.entries.filter(
-          (e) => e.status === "APPLIED" || e.status === "APPLIED_WITH_REFERRAL",
-        ).length;
-      out = [...out].sort((a, b) => score(b) - score(a));
-    } else {
-      out = [...out].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-    }
     return out;
   }, [
-    jobs,
+    sortedJobs,
     deferredQuery,
     myStatus,
     onlyReferrals,
     onlyUntouched,
     dateFrom,
     dateTo,
-    sort,
     currentUserId,
-    searchIndex,
+    jobMeta,
   ]);
 
   type DayGroup = {
@@ -392,25 +413,10 @@ export function JobsBoard({
     };
     const byKey = new Map<string, Bucket>();
     for (const job of filtered) {
-      const d = new Date(job.createdAt);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const key = `${y}-${m}-${day}`;
+      const key = jobMeta.get(job.id)?.dayKey ?? localDayKey(job.createdAt);
       let b = byKey.get(key);
       if (!b) {
-        b = {
-          key,
-          label: {
-            date: d.toLocaleDateString("en-US", {
-              month: "2-digit",
-              day: "2-digit",
-              year: "numeric",
-            }),
-            weekday: d.toLocaleDateString("en-US", { weekday: "long" }),
-          },
-          all: [],
-        };
+        b = { key, label: dayLabelFor(key), all: [] };
         byKey.set(key, b);
       }
       b.all.push(job);
@@ -432,7 +438,7 @@ export function JobsBoard({
       });
     }
     return result;
-  }, [filtered, sort, mounted, visibleCount]);
+  }, [filtered, sort, mounted, visibleCount, jobMeta]);
 
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
   // Read current jobs through a ref so callbacks can snapshot for rollback
@@ -1661,6 +1667,27 @@ function daysAgoInputValue(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
   return localDayKey(d);
+}
+
+// Day-header labels are pure functions of the day key — cache them forever so
+// regrouping while typing never touches the (slow) Intl formatters.
+const DAY_LABELS = new Map<string, { date: string; weekday: string }>();
+function dayLabelFor(key: string): { date: string; weekday: string } {
+  let label = DAY_LABELS.get(key);
+  if (!label) {
+    const [y, m, d] = key.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    label = {
+      date: dt.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+      }),
+      weekday: dt.toLocaleDateString("en-US", { weekday: "long" }),
+    };
+    DAY_LABELS.set(key, label);
+  }
+  return label;
 }
 
 // Local-timezone YYYY-MM-DD key — same bucketing as the day-group headers.
